@@ -1,0 +1,42 @@
+{
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "ツギココ",
+        "supportEmail": "hajime.fujita@gmail.com",
+        "authorizedRedirectUris": [
+          "https://tsugikoko.firebaseapp.com/__/auth/handler"
+        ]
+      }
+    }
+  },
+  "emulators": {
+    "auth": { "host": "127.0.0.1", "port": 9099 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  },
+  "apphosting": [
+    {
+      "backendId": "tsugikoko",
+      "rootDir": ".",
+      "ignore": [
+        "node_modules",
+        ".git",
+        ".next",
+        ".next-auth-test",
+        "out",
+        ".env*",
+        "AGENTS.md",
+        "CLAUDE.md",
+        ".agent-bridge",
+        ".agents",
+        ".codex",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "test-results",
+        "playwright-report",
+        "*.tsbuildinfo"
+      ]
+    }
+  ]
+}

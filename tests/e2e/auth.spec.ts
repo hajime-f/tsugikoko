@@ -1,0 +1,109 @@
+import { expect, test, type Page } from "@playwright/test";
+
+async function providerLogin(page: Page, buttonName: string, email: string, photoURL = "") {
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: buttonName, exact: true }).click();
+  const popup = await popupPromise;
+  await popup.waitForURL(/127\.0\.0\.1:9099/);
+  await popup.locator("#add-account-button").click();
+  await popup.locator("#email-input").fill(email);
+  await popup.locator("#display-name-input").fill("テストユーザー");
+  if (photoURL) await popup.locator("#profile-photo-input").fill(photoURL);
+  const closed = popup.waitForEvent("close");
+  await popup.locator("#sign-in").click();
+  await closed;
+}
+
+test("未ログインの直接アクセスでは個人画面を表示しない", async ({ page }) => {
+  await page.goto("/home");
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("heading", { name: "おかえりなさい。" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Googleでログイン", exact: true })).toBeEnabled();
+  await expect(page.getByText("あなた専用のホーム")).toHaveCount(0);
+});
+
+test("ログイン・再読込・別タブ・ログアウトとURL下書きを通して確認する", async ({ page, context, baseURL }, testInfo) => {
+  const email = `flow-${testInfo.project.name}-${Date.now()}@example.test`;
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "気になるお店や投稿のURL" }).fill("https://example.com/cafe");
+  await page.getByRole("button", { name: "保存してはじめる" }).click();
+  const photoURL = `${baseURL}/images/landing/coffee.webp`;
+  await providerLogin(page, "Googleではじめる", email, photoURL);
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByText("こんにちは、テストユーザーさん。")).toBeVisible();
+  const avatar = page.getByRole("button", { name: "アカウントを開く" }).getByRole("img", { name: "プロフィール写真" });
+  await expect(avatar).toHaveAttribute("src", photoURL);
+  await expect.poll(() => avatar.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0)).toBe(true);
+  await expect.poll(() => avatar.evaluate((e) => {
+    const rect = e.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  })).toEqual({ width: 38, height: 38 });
+  await expect(page.getByText("https://example.com/cafe", { exact: true })).toBeVisible();
+  await expect.poll(() => page.locator(".member-hero-photo img").evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("home.png"), fullPage: true });
+  await page.getByRole("tab", { name: "訪問済み" }).click();
+  await expect(page.getByRole("tabpanel")).toContainText("訪問記録・星5段階の評価機能を準備しています");
+  await page.reload();
+  await expect(page.getByText("こんにちは、テストユーザーさん。")).toBeVisible();
+  await expect(page.getByText("https://example.com/cafe", { exact: true })).toBeVisible();
+  const other = await context.newPage();
+  await other.goto(`${baseURL}/`);
+  await expect(other).toHaveURL(/\/home$/);
+  await other.getByRole("button", { name: "アカウントを開く" }).click();
+  await expect(other.getByRole("dialog")).toContainText(email);
+  const profile = other.getByRole("dialog").getByRole("img", { name: "プロフィール写真" });
+  await expect(profile).toHaveAttribute("src", photoURL);
+  await expect.poll(() => profile.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0)).toBe(true);
+  await expect.poll(() => profile.evaluate((e) => {
+    const rect = e.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  })).toEqual({ width: 46, height: 46 });
+  await expect(other.getByRole("button", { name: "Googleの連携を解除" })).toBeDisabled();
+  await other.getByRole("button", { name: "ログアウト", exact: true }).click();
+  await expect(other).toHaveURL(`${baseURL}/`);
+  await expect(page).toHaveURL(/\/login$/);
+  const drafts = await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("tsugikoko:draft:")));
+  expect(drafts).toEqual([]);
+  await other.goto(`${baseURL}/home`);
+  await expect(other).toHaveURL(/\/login$/);
+});
+
+test("別プロバイダーの追加・解除でもユーザーIDが変わらない", async ({ page, request }, testInfo) => {
+  const email = `link-${testInfo.project.name}-${Date.now()}@example.test`;
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", email);
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.locator(".account-trigger .user-avatar")).toHaveText("テ");
+  const endpoint = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/demo-tsugikoko/accounts:batchGet";
+  const accounts = async () => {
+    const response = await request.get(endpoint, { headers: { Authorization: "Bearer owner" } });
+    expect(response.ok()).toBe(true);
+    return (await response.json()).users;
+  };
+  const before = (await accounts()).find((u: { email: string }) => u.email === email);
+  expect(before.localId).toBeTruthy();
+  await page.getByRole("button", { name: "アカウントを開く" }).click();
+  await providerLogin(page, "Facebookの連携を追加", `facebook-${email}`);
+  await expect(page.getByRole("status").filter({ hasText: "Facebookを同じアカウントに追加しました" })).toBeVisible();
+  const after = (await accounts()).find((u: { localId: string }) => u.localId === before.localId);
+  expect(after.providerUserInfo.map((p: { providerId: string }) => p.providerId).sort()).toEqual(["facebook.com", "google.com"]);
+  await page.getByRole("button", { name: "Facebookの連携を解除" }).click();
+  await page.getByRole("button", { name: "連携を解除する", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "連携を解除しました。" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Googleの連携を解除" })).toBeDisabled();
+  const finalUser = (await accounts()).find((u: { localId: string }) => u.localId === before.localId);
+  expect(finalUser.providerUserInfo.map((p: { providerId: string }) => p.providerId)).toEqual(["google.com"]);
+});
+
+test("ログインのキャンセルから再試行できる", async ({ page }) => {
+  await page.goto("/login");
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Googleでログイン", exact: true }).click();
+  const popup = await popupPromise;
+  await popup.waitForURL(/127\.0\.0\.1:9099/);
+  await popup.close();
+  await expect(page.getByRole("alert").filter({ hasText: "ログインをキャンセルしました" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Googleでログイン", exact: true })).toBeEnabled();
+  await expect(page).toHaveURL(/\/login$/);
+});

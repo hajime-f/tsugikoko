@@ -1,3 +1,16 @@
 AGENTS.md
 CLAUDE.md
 .agent-bridge/
+node_modules/
+.next/
+.next-auth-test/
+out/
+.env*
+!.env.example
+next-env.d.ts
+*.tsbuildinfo
+playwright-report/
+test-results/
+.DS_Store
+firebase-debug.log
+firebase-debug.*.log

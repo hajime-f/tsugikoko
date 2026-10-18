@@ -7,16 +7,16 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { createPlaceSchema, type PlaceList, type SavedPlace } from "@/lib/places/schema";
 
 import { VisitDialog } from "@/components/places/visit-dialog";
-import { genres, isGenre, type Genre } from "@/lib/places/genres";
+import { genreGroups, genres, isGenre, type Genre } from "@/lib/places/genres";
 
 const cardMotifs = [Coffee, UtensilsCrossed, MapPin, Bookmark];
 function PlaceArtwork({ id, genre }: { id: string; genre: Genre | null }) {
-  if (isGenre(genre)) {
-    const item = genres[genre];
+  const item = isGenre(genre) ? genres[genre] : null;
+  if (item?.image) {
     return <><picture className="place-genre-picture"><source type="image/avif" srcSet={`${item.image}.avif`} /><img src={`${item.image}.webp`} alt={`${item.label}のイメージ写真（実店舗の写真ではありません）`} width={720} height={288} loading="lazy" decoding="async" /></picture><span className="place-genre-caption">{item.label}<small>イメージ</small></span></>;
   }
   const Motif = cardMotifs[parseInt(id.slice(-4), 16) % cardMotifs.length] ?? Coffee;
-  return <span className="place-art" aria-hidden="true"><Motif size={32} strokeWidth={1.5} /></span>;
+  return <><span className="place-art" aria-hidden="true"><Motif size={32} strokeWidth={1.5} /></span>{item && <span className="place-genre-caption place-genre-text">{item.label}</span>}</>;
 }
 
 export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () => void }) {
@@ -34,7 +34,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
   const [message, setMessage] = useState("");
   const [modal, setModal] = useState<{ mode: "edit" | "trash"; place: SavedPlace } | null>(null);
   const [visitDialog, setVisitDialog] = useState<{ place: SavedPlace; mode: "add" | "history" } | null>(null);
-  const [fields, setFields] = useState({ name: "", address: "", note: "" });
+  const [fields, setFields] = useState<{ name: string; address: string; note: string; genre: Genre | null }>({ name: "", address: "", note: "", genre: null });
   const [modalError, setModalError] = useState("");
   const locked = useRef(false);
   const attemptedDraft = useRef("");
@@ -172,7 +172,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       await reload();
     }, action === "trash");
   }
-  function edit(place: SavedPlace) { setFields({ name: place.name, address: place.address, note: place.note }); setModalError(""); setModal({ mode: "edit", place }); }
+  function edit(place: SavedPlace) { setFields({ name: place.name, address: place.address, note: place.note, genre: isGenre(place.genre) ? place.genre : null }); setModalError(""); setModal({ mode: "edit", place }); }
 
   return <>
     <section className="place-register" id="add-place" aria-labelledby="register-title">
@@ -200,7 +200,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
         {loading && !places.length ? <p className="places-loading" role="status"><LoaderCircle size={20} className="spinning" />マイリストを読み込んでいます...</p>
           : !places.length && !error && !cursor ? <div className="places-empty"><div className="empty-illustration" aria-hidden="true"><span className="empty-circle" /><span className="empty-paper"><Coffee size={38} strokeWidth={1.3} /><i /><i /></span><span className="empty-pin"><Bookmark size={22} /></span></div><div className="empty-copy"><h3>{tab === "trash" ? "ごみ箱は空です。" : tab === "visited" ? "「行ってよかった」を、残そう。" : "最初の「行きたい」を、ここに。"}</h3><p>{tab === "trash" ? "削除した記録は、ここから元に戻せます。" : tab === "visited" ? "行きたいリストのお店から、訪問日や星の評価を残せます。" : "お店の公式サイトや、SNSで見つけた投稿。\n気になるURLから、リストをはじめましょう。"}</p>{tab === "visited" && <button className="text-button" onClick={() => setTab("saved")}>行きたいリストを見る</button>}{tab === "saved" && <a className="text-button" href="#add-place" onClick={() => sourceInput.current?.focus()}>URLを登録する<Plus size={16} /></a>}</div></div>
           : <div className="saved-place-grid">{places.map((place) => <article className="saved-place-card" data-tone={parseInt(place.id.slice(-4), 16) % 4} key={place.id} aria-label={place.name || `${place.sourceLabel}の保存URL`}>
-            <div className="saved-place-top" data-genre={isGenre(place.genre) ? place.genre : undefined}><PlaceArtwork id={place.id} genre={place.genre} /><span className="place-state">{place.deleted ? "ごみ箱" : place.visitCount > 0 ? "訪問済み" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>
+            <div className="saved-place-top" data-genre={isGenre(place.genre) ? place.genre : undefined} data-genre-image={isGenre(place.genre) && genres[place.genre].image ? true : undefined}><PlaceArtwork id={place.id} genre={place.genre} /><span className="place-state">{place.deleted ? "ごみ箱" : place.visitCount > 0 ? "訪問済み" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>
             <h3>{place.name || `${place.sourceLabel}の気になるお店`}</h3>
             {place.address && <p className="place-address">{place.address}</p>}
             {!place.name.trim() && !place.deleted && <p className="place-status-copy">{place.extraction === "pending" ? "URLは保存済みです。画面を閉じても取得処理は続きます。" : "URLは保存済みです。「編集」から店名・住所を入力できます。"}</p>}
@@ -234,11 +234,17 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
         <DialogTitle className="dialog-title">{modal?.mode === "edit" ? "お店の情報を編集" : "ごみ箱へ移しますか？"}</DialogTitle>
         <DialogDescription className="dialog-description">{modal?.mode === "edit" ? "すべて任意です。追記した内容は、自動取得で上書きされません。" : "30日間は元に戻せます。期間を過ぎると、この保存記録は削除されます。"}</DialogDescription>
         {modal?.mode === "edit" ? <form className="place-edit-form" onSubmit={(event) => { event.preventDefault(); void perform(async () => {
-          await api(`/${modal.place.id}`, { method: "PATCH", body: JSON.stringify(fields) });
+          // ジャンルを操作しなかった場合、未取得の値を本人の指定として固定しない。
+          const { genre, ...details } = fields;
+          await api(`/${modal.place.id}`, { method: "PATCH", body: JSON.stringify({ ...details, ...(genre !== (modal.place.genre ?? null) ? { genre } : {}) }) });
           if (!active.current) return; setModal(null); setMessage("変更を保存しました。"); await reload();
         }, true); }}>
           <label>店名<input value={fields.name} maxLength={120} onChange={(event) => setFields({ ...fields, name: event.target.value })} /></label>
           <label>住所<input value={fields.address} maxLength={300} onChange={(event) => setFields({ ...fields, address: event.target.value })} /></label>
+          <div className="place-edit-field"><label htmlFor="place-genre">ジャンル</label><select id="place-genre" value={fields.genre ?? ""} disabled={busy} onChange={(event) => setFields({ ...fields, genre: isGenre(event.target.value) ? event.target.value : null })}>
+            <option value="">未設定</option>
+            {genreGroups.map(group => <optgroup key={group.label} label={group.label}>{group.options.map(genre => <option key={genre} value={genre}>{genres[genre].label}</option>)}</optgroup>)}
+          </select></div>
           <label>自分用メモ<textarea rows={4} value={fields.note} maxLength={2000} placeholder="行ってみたい理由や、気になるメニューなど" onChange={(event) => setFields({ ...fields, note: event.target.value })} /></label>
           {modalError && <p className="auth-error" role="alert">{modalError}</p>}
           <button type="submit" className="button button-dark" disabled={busy}>{busy ? "保存しています..." : "変更を保存"}</button>

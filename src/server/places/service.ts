@@ -6,7 +6,7 @@ import { ApiError } from "@/server/auth/request";
 import { MAX_VISITS, sortVisits, sourceLabel, type SavedPlace, type Visit, type VisitAction } from "@/lib/places/schema";
 import { extractionTarget, fetchPageFacts, type PageFetcher } from "@/server/extraction/sources";
 import { factsSchema } from "@/server/extraction/parser";
-import { genreFromText, isGenre } from "@/lib/places/genres";
+import { genreFromText, isGenre, type Genre } from "@/lib/places/genres";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const records = (uid: string) => database().collection("users").doc(uid).collection("savedPlaces");
@@ -18,6 +18,11 @@ const LEASE_MS = 90_000, REDISPATCH_MS = 10 * 60_000;
 const MAX_NOTE = 2000, MAX_SOURCE_URLS = 20;
 const editedFieldsOf = (doc: FirebaseFirestore.DocumentSnapshot): string[] =>
   doc.get("editedFields") ?? (doc.get("customDetails") ? ["name", "address"] : []);
+// 統合先・統合元の順に本人が選んだジャンルを優先し、なければ統合先の判定済みジャンル、自動判定の順に使う。
+function mergedGenre(target: FirebaseFirestore.DocumentSnapshot, source: FirebaseFirestore.DocumentSnapshot, extracted: Genre | null | undefined): Genre | null {
+  for (const doc of [target, source]) if (editedFieldsOf(doc).includes("genre")) return isGenre(doc.get("genre")) ? doc.get("genre") : null;
+  return isGenre(target.get("genre")) ? target.get("genre") : extracted ?? null;
+}
 function publicRecord(id: string, data: FirebaseFirestore.DocumentData): SavedPlace {
   return {
     id, placeId: data.placeId, url: data.url, sourceUrls: data.sourceUrls,
@@ -26,7 +31,8 @@ function publicRecord(id: string, data: FirebaseFirestore.DocumentData): SavedPl
     fetchedAt: data.fetchedAt, createdAt: data.createdAt, updatedAt: data.updatedAt,
     lastAttemptAt: data.lastAttemptAt, deleted: data.deleted, deleteAt: data.deleteAt, visibility: "private",
     visitCount: data.visitCount ?? 0, latestVisit: data.latestVisit ?? null,
-    genre: isGenre(data.genre) ? data.genre : genreFromText(data.name ?? ""),
+    // 本人が選んだジャンル（未設定を含む）は店名からの推測で置き換えない。
+    genre: isGenre(data.genre) ? data.genre : (data.editedFields ?? []).includes("genre") ? null : genreFromText(data.name ?? ""),
   };
 }
 
@@ -137,7 +143,7 @@ export async function updateVisit(uid: string, id: string, input: VisitAction) {
   });
 }
 
-export async function updatePlace(uid: string, id: string, changes: { name: string; address: string; note: string } | { action: "retry" | "trash" | "restore" }) {
+export async function updatePlace(uid: string, id: string, changes: { name: string; address: string; note: string; genre?: Genre | null } | { action: "retry" | "trash" | "restore" }) {
   if (!/^[a-f0-9]{64}$/.test(id)) throw new ApiError(404, "保存したお店が見つかりません。");
   return database().runTransaction(async (tx) => {
     const ref = records(uid).doc(id), doc = await tx.get(ref);
@@ -158,7 +164,10 @@ export async function updatePlace(uid: string, id: string, changes: { name: stri
     } else {
       const editedFields = new Set<string>(doc.get("editedFields") ?? (place.customDetails ? ["name", "address"] : []));
       for (const field of ["name", "address"] as const) if (changes[field] !== place[field]) editedFields.add(field);
-      patch = { ...patch, ...changes, customDetails: true, editedFields: [...editedFields] };
+      const { genre, ...fields } = changes;
+      patch = { ...patch, ...fields, customDetails: true };
+      if (genre !== undefined) { patch.genre = genre; editedFields.add("genre"); }
+      patch.editedFields = [...editedFields];
     }
     tx.update(ref, patch);
     return publicRecord(id, { ...place, ...patch });
@@ -244,7 +253,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
             sourceUrls: urls, note, customDetails: Boolean(other!.get("customDetails") || current.get("customDetails")),
             deleted: false, deleteAt: null, purgeAt: null, updatedAt: Date.now(),
             visits, ...visitSummary(visits),
-            genre: isGenre(other!.get("genre")) ? other!.get("genre") : facts.genre,
+            genre: mergedGenre(other!, current, facts.genre),
           };
           // 統合先で本人が直した項目を優先し、統合元だけで直した項目を引き継ぐ。
           for (const field of ["name", "address"] as const) {
@@ -263,7 +272,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
         name: edited.includes("name") ? current.get("name") : facts.name,
         address: edited.includes("address") ? current.get("address") : facts.address,
         placeId, extraction: "ready", reason: null, refresh: false, fetchedAt, updatedAt: Date.now(),
-        genre: facts.genre,
+        genre: edited.includes("genre") ? (isGenre(current.get("genre")) ? current.get("genre") : null) : facts.genre,
       });
       if (!otherActive) tx.set(keyRef, { id });
     });

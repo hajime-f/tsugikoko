@@ -531,17 +531,18 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .saved-place-top::before { content: ""; position: absolute; z-index: -1; width: 170px; height: 170px; border: 24px solid var(--card-shape); border-radius: 50%; right: -42px; top: -100px; }
 .saved-place-top::after { content: ""; position: absolute; z-index: -1; width: 105px; height: 105px; background: var(--card-shape); border-radius: 28px; left: 80px; bottom: -87px; transform: rotate(-25deg); }
 .place-art { display: grid; align-self: center; place-items: center; width: 62px; height: 62px; border-radius: 50%; color: var(--card-ink); background: #ffffffb3; border: 1px solid #ffffffb3; margin-right: auto; transform: rotate(-8deg); }
-.saved-place-top[data-genre] { justify-content: flex-end; color: #fff; }
-.saved-place-top[data-genre]::before { display: none; }
-.saved-place-top[data-genre]::after { z-index: 1; inset: 0; width: auto; height: auto; border-radius: 0; transform: none; background: linear-gradient(180deg, #14221b28, transparent 45%, #14221ba8); }
+.saved-place-top[data-genre-image] { justify-content: flex-end; color: #fff; }
+.saved-place-top[data-genre-image]::before { display: none; }
+.saved-place-top[data-genre-image]::after { z-index: 1; inset: 0; width: auto; height: auto; border-radius: 0; transform: none; background: linear-gradient(180deg, #14221b28, transparent 45%, #14221ba8); }
 .place-genre-picture, .place-genre-picture img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .place-genre-picture { z-index: 0; }
 .place-genre-picture img { object-fit: cover; }
-.saved-place-top[data-genre] > .place-state, .saved-place-top[data-genre] > svg { position: relative; z-index: 2; }
+.saved-place-top[data-genre-image] > .place-state, .saved-place-top[data-genre-image] > svg { position: relative; z-index: 2; }
 .saved-place-top > svg { margin-top: 7px; }
-.saved-place-top[data-genre] > svg { filter: drop-shadow(0 1px 2px #14221b); }
+.saved-place-top[data-genre-image] > svg { filter: drop-shadow(0 1px 2px #14221b); }
 .place-genre-caption { position: absolute; z-index: 2; bottom: 15px; left: 22px; display: flex; align-items: baseline; gap: 10px; color: white; font-size: 18px; font-weight: 650; text-shadow: 0 1px 3px #0005; }
 .place-genre-caption small { font-size: 10px; font-weight: 400; }
+.place-genre-caption.place-genre-text { color: var(--ink); text-shadow: none; }
 .place-state { font-size: 11px; color: var(--card-ink); background: #ffffffd9; padding: 6px 9px; border-radius: 20px; }
 .saved-place-card h3 { font-size: 19px; line-height: 1.5; overflow-wrap: anywhere; margin: 0 0 10px; }
 .place-address, .place-status-copy { font-size: 13px; color: var(--muted); line-height: 1.8; overflow-wrap: anywhere; margin: 0 0 15px; }
@@ -561,7 +562,9 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .places-more .places-error { margin: 0; }
 .place-edit-form { display: grid; gap: 16px; margin-top: 24px; }
 .place-edit-form label { display: grid; gap: 7px; font-size: 13px; font-weight: 600; }
-.place-edit-form input, .place-edit-form textarea { border: 1px solid #cdd6c8; border-radius: 8px; padding: 12px; font: inherit; font-size: 16px; width: 100%; }
+.place-edit-field { display: grid; gap: 7px; }
+.place-edit-form input, .place-edit-form textarea, .place-edit-form select { border: 1px solid #cdd6c8; border-radius: 8px; padding: 12px; font: inherit; font-size: 16px; width: 100%; }
+.place-edit-form select { min-height: 48px; background: #fff; color: var(--ink); }
 .place-edit-form textarea { resize: vertical; }
 .place-visit-summary { display: flex; align-items: flex-start; gap: 7px; color: #8a601f; font-size: 14px; margin: 0 0 14px; }
 .place-visit-summary small { display: block; color: var(--muted); font-size: 11px; line-height: 1.7; margin-top: 5px; }

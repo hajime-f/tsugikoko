@@ -131,14 +131,45 @@ test("URL登録・重複防止・編集・再ログイン・ごみ箱を通し�
   await card.getByRole("button", { name: "編集", exact: true }).click();
   await page.getByRole("dialog").getByLabel("店名", { exact: true }).fill("次の休日のお店");
   await page.getByRole("dialog").getByLabel("自分用メモ").fill("窓際の席が気になる");
+  const genreSelect = page.getByRole("dialog").getByLabel("ジャンル", { exact: true });
+  await expect(genreSelect).toHaveValue("");
+  await genreSelect.selectOption({ label: "寿司" });
   await page.getByRole("button", { name: "変更を保存", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const edited = page.getByRole("article", { name: "次の休日のお店" });
   await expect(edited.getByRole("button", { name: "編集", exact: true })).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(edited.locator(".place-status-copy")).toHaveCount(0);
+  await expect(edited.locator(".saved-place-top")).toHaveAttribute("data-genre", "sushi");
   await page.reload();
   await expect(page.getByRole("article", { name: "次の休日のお店" })).toContainText("窓際の席が気になる");
   await expect(edited.getByRole("button", { name: "編集", exact: true })).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await edited.getByRole("button", { name: "編集", exact: true }).click();
+  await expect(genreSelect).toHaveValue("sushi");
+  // 画像がない追加ジャンルも保存でき、再表示後に選択と名称が残る。
+  await genreSelect.selectOption({ label: "グリル" });
+  await page.screenshot({ path: info.outputPath("genre-edit.png"), animations: "disabled" });
+  await page.getByRole("button", { name: "変更を保存", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(edited.locator(".place-genre-caption")).toHaveText("グリル");
+  await expect(edited.locator(".place-genre-picture")).toHaveCount(0);
+  await page.reload();
+  await edited.getByRole("button", { name: "編集", exact: true }).click();
+  await expect(genreSelect).toHaveValue("grill");
+  // メモだけの保存ではジャンルを送らず、本人の選択を維持する。
+  const unchangedRequest = page.waitForRequest(request => request.method() === "PATCH" && request.url().includes("/api/places/"));
+  await page.getByRole("button", { name: "変更を保存", exact: true }).click();
+  expect((await unchangedRequest).postDataJSON()).not.toHaveProperty("genre");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await edited.getByRole("button", { name: "編集", exact: true }).click();
+  await genreSelect.selectOption("");
+  await page.getByRole("button", { name: "変更を保存", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.reload();
+  await expect(edited.locator(".place-genre-caption")).toHaveCount(0);
+  await expect(edited.locator(".place-art")).toHaveCount(1);
+  await edited.getByRole("button", { name: "編集", exact: true }).click();
+  await expect(genreSelect).toHaveValue("");
+  await page.getByRole("dialog").getByRole("button", { name: "閉じる" }).click();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath("saved-places.png"), fullPage: true });
   await page.getByRole("button", { name: "アカウントを開く" }).click();
@@ -291,6 +322,31 @@ test("訪問APIは本人だけに履歴を返し、評価と日付・所有者�
   expect((await (await request.get("/api/places?status=visited", { headers: otherHeaders })).json()).places).toEqual([]);
 });
 
+test("提供画像で追加したジャンルを選択・保存し、再読み込み後も画像を表示する", async ({ page }, info) => {
+  const { genres } = await import("../../src/lib/places/genres");
+  const additions = ["gyoza", "beer_garden", "soup_curry", "donburi", "kissaten", "indian_curry", "hamburger", "takoyaki", "onigiri", "bento_deli", "udon", "bar"] as const;
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `genre-additions-${info.project.name}-${Date.now()}@example.test`);
+  await page.getByLabel("登録するお店や投稿のURL").fill(unsupported);
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  const card = page.getByRole("article");
+  for (const id of additions) {
+    await card.getByRole("button", { name: "編集", exact: true }).click();
+    const select = page.getByRole("dialog").getByLabel("ジャンル", { exact: true });
+    await select.selectOption({ label: genres[id].label });
+    await page.getByRole("button", { name: "変更を保存", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.reload();
+    await expect(card.locator(".saved-place-top")).toHaveAttribute("data-genre", id);
+    const photo = card.getByRole("img", { name: `${genres[id].label}のイメージ写真（実店舗の写真ではありません）`, exact: true });
+    await photo.scrollIntoViewIfNeeded();
+    await expect.poll(() => photo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+    await card.getByRole("button", { name: "編集", exact: true }).click();
+    await expect(select).toHaveValue(id);
+    await page.getByRole("dialog").getByRole("button", { name: "閉じる" }).click();
+  }
+});
+
 test("ジャンルごとの軽量画像を遅延読み込みし、不明な店舗は従来の装飾を表示する", async ({ page }, info) => {
   const { genres } = await import("../../src/lib/places/genres");
   const entries = Object.entries(genres);
@@ -303,6 +359,12 @@ test("ジャンルごとの軽量画像を遅延読み込みし、不明な店�
   for (const [, genre] of entries) {
     const card = page.getByRole("article", { name: `画像テスト ${genre.label}`, exact: true });
     await card.scrollIntoViewIfNeeded();
+    await expect(card.locator(".place-genre-caption")).toContainText(genre.label);
+    if (!genre.image) {
+      await expect(card.locator("img")).toHaveCount(0);
+      await expect(card.locator(".place-art")).toHaveCount(1);
+      continue;
+    }
     const img = card.getByRole("img", { name: `${genre.label}のイメージ写真（実店舗の写真ではありません）`, exact: true });
     await expect(img).toHaveAttribute("loading", "lazy");
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);

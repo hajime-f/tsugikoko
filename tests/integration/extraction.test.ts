@@ -197,3 +197,50 @@ test("ジャンルを抽出・共有キャッシュへ保存し、再取得・�
   const merged = (await listPlaces(uid, false, null)).places;
   assert.equal(merged.length, 1); assert.equal(merged[0].genre, "sushi"); assert.equal(merged[0].visitCount, 1);
 });
+
+test("本人が選んだジャンルと未設定は、自動判定・店名からの推測・店舗統合で上書きしない", async () => {
+  const uid = `genre-edit-${randomUUID()}`, urlA = "https://genre-edit-a.example.com/shop", urlB = "https://genre-edit-b.example.com/shop";
+  for (const url of [urlA, urlB]) await database().doc(`placeSources/${sourceHash(url)}`).delete();
+  const sushi = '<script type="application/ld+json">{"@type":"Restaurant","name":"鮨 こはる","address":"東京都渋谷区恵比寿1-2-3","servesCuisine":"寿司"}</script>';
+  const fetcher = mockPages({ [urlA]: sushi, [urlB]: sushi });
+  const first = (await createPlace(uid, urlA)).place;
+  // 未設定を選ぶと、店名に「鮨」があってもジャンルを推測しない。
+  assert.equal((await updatePlace(uid, first.id, { name: "鮨 こはる", address: "", note: "", genre: null })).genre, null);
+  await processExtraction(uid, first.id, { fetcher });
+  const firstRecord = await database().doc(`users/${uid}/savedPlaces/${first.id}`).get();
+  assert.equal(firstRecord.get("genre"), null);
+  assert.equal((await listPlaces(uid, false, null)).places[0].genre, null);
+  // 省略時は維持し、選択したジャンルは自動判定より優先する。
+  assert.equal((await updatePlace(uid, first.id, { name: "鮨 こはる", address: "東京都渋谷区恵比寿1-2-3", note: "" })).genre, null);
+  assert.equal((await updatePlace(uid, first.id, { name: "鮨 こはる", address: "東京都渋谷区恵比寿1-2-3", note: "", genre: "izakaya" })).genre, "izakaya");
+  const second = (await createPlace(uid, urlB)).place;
+  await processExtraction(uid, second.id, { fetcher });
+  const merged = (await listPlaces(uid, false, null)).places;
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].genre, "izakaya");
+  // 統合元で本人が選んだジャンルも、統合先が未選択なら引き継ぐ。
+  const uid2 = `genre-edit-${randomUUID()}`;
+  const target = (await createPlace(uid2, urlA)).place;
+  await processExtraction(uid2, target.id, { fetcher });
+  const source = (await createPlace(uid2, urlB)).place;
+  await updatePlace(uid2, source.id, { name: "", address: "", note: "", genre: "kaiseki" });
+  await processExtraction(uid2, source.id, { fetcher });
+  const merged2 = (await listPlaces(uid2, false, null)).places;
+  assert.equal(merged2.length, 1);
+  assert.equal(merged2[0].genre, "kaiseki");
+});
+
+test("追加したジャンルを保存・読み出しでき、JSON-LDの料理分類からも細かい分類で判定する", async () => {
+  const uid = `genre-new-${randomUUID()}`;
+  const { place } = await createPlace(uid, "https://tabelog.com/tokyo/A1303/A130302/13000099/");
+  for (const genre of ["gyoza", "beer_garden", "soup_curry", "donburi", "kissaten", "indian_curry", "hamburger", "takoyaki", "onigiri", "bento_deli", "udon", "bar"] as const) {
+    assert.equal((await updatePlace(uid, place.id, { name: "店", address: "", note: "", genre })).genre, genre);
+    assert.equal((await listPlaces(uid, false, null)).places[0].genre, genre);
+  }
+  const url = "https://soup-curry.example.com/shop";
+  await database().doc(`placeSources/${sourceHash(url)}`).delete();
+  const html = '<script type="application/ld+json">{"@type":"Restaurant","name":"こはる","address":"北海道札幌市中央区南1条西1-2-3","servesCuisine":"スープカレー"}</script>';
+  const created = (await createPlace(uid, url)).place;
+  await processExtraction(uid, created.id, { fetcher: mockPages({ [url]: html }) });
+  assert.equal((await database().doc(`users/${uid}/savedPlaces/${created.id}`).get()).get("genre"), "soup_curry");
+});

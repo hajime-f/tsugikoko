@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Genre } from "./genres";
+import { isGenre, type Genre } from "./genres";
 
 export function normalizePlaceUrl(value: string): string {
   const url = new URL(value.trim());
@@ -38,6 +38,8 @@ export const createPlaceSchema = z.object({ url: z.string().max(2048).transform(
 }) }).strict();
 export const editPlaceSchema = z.object({
   name: z.string().trim().max(120), address: z.string().trim().max(300), note: z.string().trim().max(2000),
+  // 省略時は現在のジャンルを維持し、nullは本人が明示的に未設定へ戻したことを表す。
+  genre: z.custom<Genre>(isGenre, "ジャンルを選び直してください。").nullable().optional(),
 }).strict();
 export const actionSchema = z.object({ action: z.enum(["retry", "trash", "restore"]) }).strict();
 

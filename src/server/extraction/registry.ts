@@ -15,7 +15,7 @@ export async function resolveSource(value: string): Promise<ExtractionSource | u
   if (!config?.enabled || config.url !== url) return;
   return {
     url, kind: "page", version: "registered-page-json-ld-ai-v1", reviewDate: "2026-10-18", policyUrl: url,
-    aiScope: "公開ページの店舗名・所在地候補のみ。紹介文・画像・口コミ・個人メモは保存しない。",
+    aiScope: "公開ページの店舗名・所在地・料理ジャンル候補のみ。紹介文・画像・口コミ・個人メモは保存しない。",
     basis: "ユーザーが登録済み店舗の再解析を明示的に依頼。URL単位の試作設定。運営者の許諾取得を意味しない。",
   };
 }

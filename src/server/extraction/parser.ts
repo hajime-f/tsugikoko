@@ -1,7 +1,8 @@
 import { load } from "cheerio";
 import { z } from "zod";
+import { genreFromText, isGenre } from "../../lib/places/genres";
 
-export const factsSchema = z.object({ name: z.string().trim().min(1).max(120), address: z.string().trim().min(8).max(300) }).strict();
+export const factsSchema = z.object({ name: z.string().trim().min(1).max(120), address: z.string().trim().min(8).max(300), genre: z.custom<import("../../lib/places/genres").Genre>(isGenre).nullable().optional() }).strict();
 export type PlaceFacts = z.infer<typeof factsSchema>;
 export const compact = (text: string) => text.normalize("NFKC").replace(/\s+/g, "").toLowerCase();
 type Node = Record<string, unknown>;
@@ -40,7 +41,11 @@ export function extractJsonLd(html: string): PlaceFacts | null {
     }
     const result = factsSchema.safeParse({ name: clean(node.name), address: addressText });
     if (!result.success) { incomplete = true; continue; }
-    candidates.set(`${compact(result.data.name)}|${compact(result.data.address)}`, result.data);
+    const cuisine = [node.servesCuisine].flat().map(clean).join("、");
+    const genre = genreFromText(cuisine) ?? (types.includes("CafeOrCoffeeShop") ? "cafe" : types.includes("Bakery") ? "bakery" : null);
+    const key = `${compact(result.data.name)}|${compact(result.data.address)}`;
+    const previous = candidates.get(key);
+    candidates.set(key, { ...result.data, ...(genre ? { genre } : previous?.genre ? { genre: previous.genre } : {}) });
   }
   // Never choose the first branch from a page containing several restaurants.
   return !incomplete && candidates.size === 1 ? [...candidates.values()][0] : null;
@@ -49,6 +54,7 @@ export function extractJsonLd(html: string): PlaceFacts | null {
 const aiFactsSchema = z.object({
   unique: z.boolean(), name: z.string().nullable(), address: z.string().nullable(),
   nameEvidence: z.string().max(500).nullable(), addressEvidence: z.string().max(700).nullable(),
+  cuisine: z.string().max(100).nullable().optional(), cuisineEvidence: z.string().max(200).nullable().optional(),
 }).strict();
 
 export function validateAiFacts(value: unknown, pageText: string): PlaceFacts | null {
@@ -61,7 +67,30 @@ export function validateAiFacts(value: unknown, pageText: string): PlaceFacts | 
     const evidence = result.data[`${field}Evidence`];
     if (!evidence || !text.includes(compact(evidence)) || !compact(evidence).includes(compact(facts.data[field]))) return null;
   }
-  return facts.data;
+  const { cuisine, cuisineEvidence } = result.data;
+  const genre = cuisine && cuisineEvidence && text.includes(compact(cuisineEvidence)) && compact(cuisineEvidence).includes(compact(cuisine)) ? genreFromText(cuisine) : null;
+  return { ...facts.data, ...(genre ? { genre } : {}) };
+}
+
+// 店舗情報欄の短い分類だけを読む。本文・口コミ・関連記事は分類根拠にしない。
+export function cuisineLabels(html: string): string[] {
+  const $ = load(html);
+  $("script, style, nav, aside, footer, [hidden], [aria-hidden='true'], [itemprop='review'], .rvw-item, .rvw-item__rvw-comment").remove();
+  const values: string[] = [];
+  $("[itemprop='servesCuisine']").each((_, el) => { values.push($(el).attr("content") ?? $(el).text()); });
+  $("th, dt").each((_, el) => {
+    if (/^(ジャンル|料理ジャンル|料理のジャンル|料理|料理種別|料理の種類|cuisine|cuisines)$/i.test($(el).text().trim())) values.push($(el).next("td, dd").text());
+  });
+  return [...new Set(values.map(value => value.replace(/\s+/g, " ").trim()).filter(value => value && value.length <= 100))];
+}
+
+export function enrichGenre(facts: PlaceFacts, html: string): PlaceFacts {
+  const labels = cuisineLabels(html).map(genreFromText).filter(Boolean);
+  const unique = [...new Set(labels)];
+  const title = load(html)("head > title").first().text().trim();
+  const titleGenre = title.length < 300 && compact(title).includes(compact(facts.name)) ? genreFromText(title) : null;
+  const genre = facts.genre ?? (unique.length === 1 ? unique[0] : null) ?? titleGenre ?? genreFromText(facts.name);
+  return { ...facts, ...(genre ? { genre } : {}) };
 }
 
 export type ExtractionReason = "unsupported" | "not_found" | "ai_unavailable" | "ai_limit";
@@ -72,13 +101,13 @@ export class AiLimitError extends Error {}
 
 export async function analyzePage(html: string, aiText: (html: string) => string, infer: AiExtractor): Promise<ExtractionResult> {
   const facts = extractJsonLd(html);
-  if (facts) return { facts, method: "json-ld-v1" };
+  if (facts) return { facts: enrichGenre(facts, html), method: "json-ld-v1" };
   const text = aiText(html);
   // Reject oversized text instead of truncating away another branch/address.
   if (!text.trim() || text.length > 6000 || Buffer.byteLength(text, "utf8") > 12_000) return { facts: null, reason: "not_found" };
   try {
     const facts = await infer(text);
-    return facts ? { facts, method: "gemini-text-v1" } : { facts: null, reason: "not_found" };
+    return facts ? { facts: enrichGenre(facts, html), method: "gemini-text-v1" } : { facts: null, reason: "not_found" };
   } catch (error) {
     if (error instanceof AiLimitError) return { facts: null, reason: "ai_limit" };
     if (error instanceof AiUnavailableError) return { facts: null, reason: "ai_unavailable" };

@@ -27,3 +27,30 @@ test("許可範囲外のページを外部取得先にしない", () => {
   assert.equal(reviewedSource("https://restaurant.ikyu.com/148322/")?.url, "https://restaurant.ikyu.com/148322");
   assert.equal(reviewedSource("https://tabelog.com/tokyo/A1303/A130302/13323066/")?.kind, "page");
 });
+
+test("訪問日の実在・未来日・整数の星評価・非公開入力を検証する", async () => {
+  const { visitActionSchema, todayInJapan } = await import("../../src/lib/places/schema");
+  const input = { action: "addVisit", visitId: "12345678-1234-4123-8123-123456789abc", visitedOn: todayInJapan(), rating: 5, comment: "" };
+  assert.equal(visitActionSchema.safeParse(input).success, true);
+  assert.equal(visitActionSchema.safeParse({ ...input, rating: null }).success, true);
+  for (const visitedOn of ["2025-02-29", "2024-02-30", "2024-13-01", "1899-12-31", "9999-01-01", ""]) assert.equal(visitActionSchema.safeParse({ ...input, visitedOn }).success, false);
+  assert.equal(visitActionSchema.safeParse({ ...input, visitedOn: "2024-02-29" }).success, true);
+  for (const rating of [0, 6, 4.5, "5"]) assert.equal(visitActionSchema.safeParse({ ...input, rating }).success, false);
+  for (const extra of [{ uid: "other" }, { visibility: "public" }, { comment: "あ".repeat(2001) }]) assert.equal(visitActionSchema.safeParse({ ...input, ...extra }).success, false);
+});
+
+test("対応ジャンルの名称から画像を選び、曖昧な店名や焼きそばは誤分類しない", async () => {
+  const { genres, genreFromText, isGenre } = await import("../../src/lib/places/genres");
+  const { existsSync } = await import("node:fs");
+  for (const genre of Object.values(genres)) {
+    assert.ok(existsSync(`public${genre.image}.avif`));
+    assert.ok(existsSync(`public${genre.image}.webp`));
+  }
+  assert.equal(genreFromText("鮨 こはる"), "sushi");
+  assert.equal(genreFromText("焼鳥 こはる"), "yakitori");
+  assert.equal(genreFromText("中華そば こはる"), "ramen");
+  assert.equal(genreFromText("焼きそば専門店"), null);
+  assert.equal(genreFromText("こはる"), null);
+  assert.equal(isGenre("toString"), false);
+  assert.equal(isGenre("../../secret"), false);
+});

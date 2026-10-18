@@ -89,7 +89,7 @@ export function HomePage() {
         </> : <>
           <span className="modal-brand"><Bookmark size={28} /></span><DialogTitle className="dialog-title">「行きたい」を、忘れない。</DialogTitle><DialogDescription className="dialog-description">URLからはじまる、次のお出かけ。</DialogDescription>
           <ol className="home-guide"><li><span>01</span><div><h3>気になるお店を見つける</h3><p>お店のサイトやInstagram・Xで見つけたURLをコピー。</p></div></li><li><span>02</span><div><h3>URLを貼って、リストに残す</h3><p>店舗の情報を自動で取得。個人の記録は非公開から。</p></div></li><li><span>03</span><div><h3>行ってみたら、感想を残す</h3><p>星5段階の評価から、好みに合う次の一軒へ。</p></div></li></ol>
-          <p className="feature-status">URLからの店舗登録と非公開のマイリストをご利用いただけます。訪問記録・評価・おすすめ機能は準備中です。</p>
+          <p className="feature-status">URLからの店舗登録、非公開のマイリスト、訪問記録・星5段階の評価をご利用いただけます。おすすめ機能は準備中です。</p>
         </>}
       </DialogContent>
     </Dialog>

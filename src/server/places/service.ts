@@ -3,12 +3,13 @@ import { createHash, randomUUID } from "node:crypto";
 import { FieldPath, Timestamp } from "firebase-admin/firestore";
 import { database } from "@/server/firebase/admin";
 import { ApiError } from "@/server/auth/request";
-import { sourceLabel, type SavedPlace } from "@/lib/places/schema";
+import { MAX_VISITS, sortVisits, sourceLabel, type SavedPlace, type Visit, type VisitAction } from "@/lib/places/schema";
 import { fetchPageFacts } from "@/server/extraction/sources";
 import { resolveSource } from "@/server/extraction/registry";
 import { factsSchema } from "@/server/extraction/parser";
 import { extractWithAi } from "@/server/extraction/ai";
 import { AI_MODEL } from "@/server/extraction/gemini";
+import { genreFromText, isGenre } from "@/lib/places/genres";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const records = (uid: string) => database().collection("users").doc(uid).collection("savedPlaces");
@@ -27,6 +28,8 @@ function publicRecord(id: string, data: FirebaseFirestore.DocumentData): SavedPl
     extraction: data.extraction, reason: data.reason, sourceLabel: data.sourceLabel,
     fetchedAt: data.fetchedAt, createdAt: data.createdAt, updatedAt: data.updatedAt,
     lastAttemptAt: data.lastAttemptAt, deleted: data.deleted, deleteAt: data.deleteAt, visibility: "private",
+    visitCount: data.visitCount ?? 0, latestVisit: data.latestVisit ?? null,
+    genre: isGenre(data.genre) ? data.genre : genreFromText(data.name ?? ""),
   };
 }
 
@@ -63,7 +66,7 @@ export async function createPlace(uid: string, url: string) {
       id, placeId: null, url, sourceUrls: [url], name: "", address: "", note: "", customDetails: false,
       extraction: supported ? "pending" : "needs_review", reason: supported ? null : "unsupported",
       sourceLabel: sourceLabel(url), fetchedAt: null, createdAt: now, updatedAt: now, lastAttemptAt: null,
-      deleted: false, deleteAt: null, visibility: "private",
+      deleted: false, deleteAt: null, visibility: "private", visitCount: 0, latestVisit: null, genre: null,
     };
     tx.set(ref, { ...place, attempts: 0, purgeAt: null });
     tx.set(key, { id });
@@ -71,7 +74,7 @@ export async function createPlace(uid: string, url: string) {
   });
 }
 
-export async function listPlaces(uid: string, trash: boolean, cursor: string | null) {
+export async function listPlaces(uid: string, trash: boolean, cursor: string | null, status: "all" | "saved" | "visited" = "all") {
   let query = records(uid).where("deleted", "==", trash).orderBy("createdAt", "desc").orderBy(FieldPath.documentId(), "desc").limit(31);
   if (cursor) {
     const match = cursor.match(/^(\d{13}):([a-f0-9]{64})$/);
@@ -80,9 +83,61 @@ export async function listPlaces(uid: string, trash: boolean, cursor: string | n
   }
   const snapshot = await query.get();
   const docs = snapshot.docs.slice(0, 30);
-  const places = docs.map((doc) => publicRecord(doc.id, doc.data())).filter((place) => !expired(place));
+  // 旧データには訪問件数がないため、移行不要で読めるよう取得した30件を分類する。
+  // 空ページにも次カーソルを返し、クライアントが続きの範囲を遅延取得する。
+  const places = docs.map((doc) => publicRecord(doc.id, doc.data())).filter((place) => !expired(place) &&
+    (trash || status === "all" || (status === "visited" ? place.visitCount > 0 : place.visitCount === 0)));
   const last = docs.at(-1);
   return { places, nextCursor: snapshot.size > 30 && last ? `${last.get("createdAt")}:${last.id}` : null };
+}
+
+function visitSummary(visits: Visit[]) {
+  const latest = sortVisits(visits)[0];
+  return { visitCount: visits.length, latestVisit: latest ? { id: latest.id, visitedOn: latest.visitedOn, rating: latest.rating } : null };
+}
+
+export async function listVisits(uid: string, id: string, cursor: string | null) {
+  if (!/^[a-f0-9]{64}$/.test(id)) throw new ApiError(404, "保存したお店が見つかりません。");
+  const doc = await records(uid).doc(id).get();
+  if (!doc.exists || expired(publicRecord(id, doc.data()!))) throw new ApiError(404, "保存したお店が見つかりません。");
+  const visits = sortVisits((doc.get("visits") ?? []) as Visit[]);
+  const offset = cursor ? visits.findIndex(visit => visit.id === cursor) + 1 : 0;
+  if (cursor && offset === 0) throw new ApiError(400, "履歴が更新されました。一度閉じて、開き直してください。");
+  const page = visits.slice(offset, offset + 10);
+  return { visits: page, nextCursor: offset + page.length < visits.length ? page.at(-1)!.id : null };
+}
+
+export async function updateVisit(uid: string, id: string, input: VisitAction) {
+  if (!/^[a-f0-9]{64}$/.test(id)) throw new ApiError(404, "保存したお店が見つかりません。");
+  return database().runTransaction(async tx => {
+    const ref = records(uid).doc(id), doc = await tx.get(ref);
+    if (!doc.exists || expired(publicRecord(id, doc.data()!))) throw new ApiError(404, "保存したお店が見つかりません。");
+    const data = doc.data()!;
+    if (data.deleted) throw new ApiError(409, "ごみ箱から戻してから記録してください。");
+    let visits = (data.visits ?? []) as Visit[];
+    const existing = visits.find(visit => visit.id === input.visitId);
+    const now = Date.now();
+    if (input.action === "addVisit") {
+      // 応答を受け取れず再送しても、同じ操作の記録を増やさない。
+      if (existing) {
+        if (existing.visitedOn !== input.visitedOn || existing.rating !== input.rating || existing.comment !== input.comment) throw new ApiError(409, "この記録は保存済みです。一度閉じて履歴を確認してください。");
+        return publicRecord(id, data);
+      }
+      if (visits.length >= MAX_VISITS) throw new ApiError(409, `試作版では1店舗につき${MAX_VISITS}回まで記録できます。`);
+      visits = [...visits, { id: input.visitId, visitedOn: input.visitedOn, rating: input.rating, comment: input.comment, createdAt: now, updatedAt: now }];
+    } else {
+      if (!existing) {
+        if (input.action === "deleteVisit") return publicRecord(id, data);
+        throw new ApiError(404, "訪問記録が見つかりません。一度閉じて履歴を確認してください。");
+      }
+      if (existing.updatedAt !== input.updatedAt) throw new ApiError(409, "別の画面で記録が更新されました。一度閉じて履歴を確認してください。");
+      visits = input.action === "deleteVisit" ? visits.filter(visit => visit.id !== input.visitId) : visits.map(visit => visit.id === input.visitId
+        ? { ...visit, visitedOn: input.visitedOn, rating: input.rating, comment: input.comment, updatedAt: Math.max(now, visit.updatedAt + 1) } : visit);
+    }
+    const patch = { visits, ...visitSummary(visits), updatedAt: now };
+    tx.update(ref, patch);
+    return publicRecord(id, { ...data, ...patch });
+  });
 }
 
 export async function updatePlace(uid: string, id: string, changes: { name: string; address: string; note: string } | { action: "retry" | "trash" | "restore" }) {
@@ -156,16 +211,16 @@ export async function processExtraction(uid: string, id: string, options: { forc
   try {
     const cacheRef = database().doc(`placeSources/${hash(source.url)}`);
     const cache = (await cacheRef.get()).data();
-    const cachedFacts = factsSchema.safeParse({ name: cache?.name, address: cache?.address });
+    const cachedFacts = factsSchema.safeParse({ name: cache?.name, address: cache?.address, ...(cache?.genre !== undefined ? { genre: cache.genre } : {}) });
     // 本人の「再取得」は元ページを読み直す。連打や複数人の同時依頼は10分以内の結果で吸収する。
     const maxAge = options.forceRefresh ? 0 : leased.refresh ? REFRESH_CACHE_MS : CACHE_MS;
-    const fresh = cache && cache.provenance?.version === source.version && Date.now() - cache.fetchedAt >= 0 && Date.now() - cache.fetchedAt < maxAge && cachedFacts.success;
+    const fresh = cache && cache.genre !== undefined && cache.provenance?.version === source.version && Date.now() - cache.fetchedAt >= 0 && Date.now() - cache.fetchedAt < maxAge && cachedFacts.success;
     const result = fresh ? { facts: cachedFacts.data, method: cache.provenance.method } : await fetchPageFacts(place.url, text => extractWithAi(uid, text), fetch, source);
     if (!result.facts) {
       await finishWithoutFacts(result.reason);
       return "done";
     }
-    const facts = result.facts;
+    const facts = { ...result.facts, genre: result.facts.genre ?? genreFromText(result.facts.name) };
     const fetchedAt = fresh ? cache.fetchedAt : Date.now();
     const placeId = hash(`${facts.name.normalize("NFKC").toLowerCase().replace(/\s/g, "")}|${facts.address.normalize("NFKC").replace(/\s/g, "")}`);
     const provenance = fresh ? cache.provenance : { ...source, method: result.method, model: result.method === "gemini-text-v1" ? AI_MODEL : null, fetchedAt };
@@ -181,11 +236,15 @@ export async function processExtraction(uid: string, id: string, options: { forc
         // 同じ店舗の記録は1件にまとめ、本人のメモ・修正は統合先へ移す。
         const urls = [...new Set<string>([...other!.get("sourceUrls"), ...current.get("sourceUrls")])];
         const note = [...new Set([other!.get("note"), current.get("note")].map((value) => (value ?? "").trim()).filter(Boolean))].join("\n\n");
-        if (urls.length <= MAX_SOURCE_URLS && note.length <= MAX_NOTE) {
+        const visits = [...(other!.get("visits") ?? []), ...(current.get("visits") ?? [])] as Visit[];
+        const uniqueVisits = new Set(visits.map(visit => visit.id)).size === visits.length;
+        if (urls.length <= MAX_SOURCE_URLS && note.length <= MAX_NOTE && visits.length <= MAX_VISITS && uniqueVisits) {
           const otherEdited = editedFieldsOf(other!), currentEdited = editedFieldsOf(current);
           const patch: Record<string, unknown> = {
             sourceUrls: urls, note, customDetails: Boolean(other!.get("customDetails") || current.get("customDetails")),
             deleted: false, deleteAt: null, purgeAt: null, updatedAt: Date.now(),
+            visits, ...visitSummary(visits),
+            genre: isGenre(other!.get("genre")) ? other!.get("genre") : facts.genre,
           };
           // 統合先で本人が直した項目を優先し、統合元だけで直した項目を引き継ぐ。
           for (const field of ["name", "address"] as const) {
@@ -204,6 +263,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
         name: edited.includes("name") ? current.get("name") : facts.name,
         address: edited.includes("address") ? current.get("address") : facts.address,
         placeId, extraction: "ready", reason: null, refresh: false, fetchedAt, updatedAt: Date.now(),
+        genre: facts.genre,
       });
       if (!otherActive) tx.set(keyRef, { id });
     });

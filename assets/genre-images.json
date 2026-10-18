@@ -1,0 +1,73 @@
+{
+  "generator": "Built-in image_gen",
+  "purpose": "Generic cuisine imagery, not photos of the saved restaurants",
+  "date": "2026-10-18",
+  "assets": [
+    {
+      "id": "sushi",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: assorted Japanese nigiri sushi: salmon, tuna and white fish on a simple ceramic plate. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/sushi.{avif,webp}",
+      "original": "assets/originals/genres/sushi.png"
+    },
+    {
+      "id": "yakiniku",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese yakiniku: several small pieces of beautifully browned grilled beef, on a small dark charcoal tabletop grill. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/yakiniku.{avif,webp}",
+      "original": "assets/originals/genres/yakiniku.png"
+    },
+    {
+      "id": "yakitori",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese yakitori: three skewers of grilled chicken thigh and scallions with a light tare glaze on an earthenware plate. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/yakitori.{avif,webp}",
+      "original": "assets/originals/genres/yakitori.png"
+    },
+    {
+      "id": "chinese",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Chinese cuisine: a bamboo steamer of plump steamed dumplings with one small plate of golden gyoza. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/chinese.{avif,webp}",
+      "original": "assets/originals/genres/chinese.png"
+    },
+    {
+      "id": "italian",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Italian cuisine: a plate of spaghetti with fresh tomato sauce, basil and parmesan. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/italian.{avif,webp}",
+      "original": "assets/originals/genres/italian.png"
+    },
+    {
+      "id": "french",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: French cuisine: a carefully plated roast duck breast with seasonal vegetables and a small amount of sauce. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/french.{avif,webp}",
+      "original": "assets/originals/genres/french.png"
+    },
+    {
+      "id": "japanese",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese washoku: a neat tray with grilled fish, rice, miso soup and a small vegetable side dish. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/japanese.{avif,webp}",
+      "original": "assets/originals/genres/japanese.png"
+    },
+    {
+      "id": "ramen",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese ramen: one ceramic bowl of shoyu ramen with sliced pork, half a soft-boiled egg and scallions. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/ramen.{avif,webp}",
+      "original": "assets/originals/genres/ramen.png"
+    },
+    {
+      "id": "curry",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese curry rice: one plate with rich brown curry, rice, carrots and potatoes. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/curry.{avif,webp}",
+      "original": "assets/originals/genres/curry.png"
+    },
+    {
+      "id": "soba",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese soba: buckwheat noodles on a woven bamboo tray, a small dipping bowl and scallions. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/soba.{avif,webp}",
+      "original": "assets/originals/genres/soba.png"
+    },
+    {
+      "id": "bakery",
+      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Bakery: two flaky croissants and a small artisan bread loaf on a ceramic plate. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
+      "output": "public/images/genres/bakery.{avif,webp}",
+      "original": "assets/originals/genres/bakery.png"
+    }
+  ]
+}

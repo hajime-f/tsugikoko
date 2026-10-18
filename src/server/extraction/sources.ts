@@ -1,5 +1,5 @@
 import { load } from "cheerio";
-import { analyzePage, type AiExtractor, type ExtractionResult } from "./parser";
+import { analyzePage, cuisineLabels, type AiExtractor, type ExtractionResult } from "./parser";
 import { normalizePlaceUrl } from "../../lib/places/schema";
 
 export type ExtractionSource = {
@@ -12,8 +12,8 @@ export const reviewedSources: ExtractionSource[] = [{
   policyUrl: "https://www.tabisurucafe.com/general-5",
   version: "json-ld-ai-v1",
   kind: "official",
-  aiScope: "ページタイトルと所在地を記載した連絡先段落のみ。紹介文・画像・口コミ・利用者情報は外部AIへ送信しない。",
-  basis: "公式店舗ページと公開方針を確認。創作的な紹介文・画像を除き、店名と所在地の事実のみ。明示的なライセンス取得ではなく、個別の事実情報の利用として採用。",
+  aiScope: "ページタイトル・所在地を記載した連絡先段落・料理ジャンル欄のみ。紹介文・画像・口コミ・利用者情報は外部AIへ送信しない。",
+  basis: "公式店舗ページと公開方針を確認。創作的な紹介文・画像を除き、店名・所在地・料理ジャンルの事実のみ。明示的なライセンス取得ではなく、個別の事実情報の利用として採用。",
 }];
 // 試作として両サイトを有効化するユーザーの明示的指示による設定。
 // サイト運営者の許諾を取得済みという意味ではない。
@@ -29,7 +29,7 @@ export function reviewedSource(value: string): ExtractionSource | undefined {
   return {
     url, kind: "page", reviewDate: "2026-10-18", version: "trial-json-ld-ai-v1",
     policyUrl: tabelog ? "https://tabelog.com/help/rules/" : "https://restaurant.ikyu.com/rsMirror/rsMirrorTerms.asp",
-    aiScope: "店舗名・所在地の候補を含むページタイトル・見出し・店舗情報欄。画像・口コミは送らない。",
+    aiScope: "店舗名・所在地・料理ジャンルの候補を含むページタイトル・見出し・店舗情報欄。画像・口コミは送らない。",
     basis: "ユーザーが試作での取得・保存を明示的に指示。運営者の許諾は未取得。停止要請時には対象から外す。",
   };
 }
@@ -39,7 +39,7 @@ export function officialAiText(html: string) {
   const title = $("head > title").first().text().trim();
   $("script, style, noscript, [hidden], [aria-hidden='true']").remove();
   const contacts = [...new Set($("p").toArray().map(p => $(p).text().trim()).filter(value => /^\d{3}-\d{4}\s+東京都渋谷区/.test(value)))];
-  return contacts.length ? [title, ...contacts].join("\n") : "";
+  return contacts.length ? [title, ...contacts, ...cuisineLabels(html).map(value => `料理ジャンル: ${value}`)].join("\n") : "";
 }
 
 export function pageAiText(html: string) {
@@ -59,7 +59,7 @@ export function pageAiText(html: string) {
   const addresses = unique.filter(text => !unique.some(other => other !== text && other.includes(text)));
   // SNSプロフィール等では所在地が公開メタ情報にだけ存在することがある。
   const metaAddresses = description.split(/\r?\n/).map(t => t.trim()).filter(t => t.length < 500 && addressPattern.test(t));
-  const text = [...new Set([title, ...headings, ...addresses, ...metaAddresses].filter(Boolean))].join("\n");
+  const text = [...new Set([title, ...headings, ...addresses, ...metaAddresses, ...cuisineLabels(html).map(value => `料理ジャンル: ${value}`)].filter(Boolean))].join("\n");
   return addresses.length || metaAddresses.length ? text : "";
 }
 

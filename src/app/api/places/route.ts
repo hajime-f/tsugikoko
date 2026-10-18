@@ -2,6 +2,7 @@ import { authenticatedUid, errorResponse, jsonResponse, smallJson } from "@/serv
 import { createPlaceSchema } from "@/lib/places/schema";
 import { createPlace, limitWrites, listPlaces } from "@/server/places/service";
 import { dispatchExtraction } from "@/server/places/dispatch";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,7 +10,8 @@ export const maxDuration = 60;
 export async function GET(request: Request) {
   try {
     const uid = await authenticatedUid(request), params = new URL(request.url).searchParams;
-    const result = await listPlaces(uid, params.get("trash") === "1", params.get("cursor"));
+    const status = z.enum(["all", "saved", "visited"]).parse(params.get("status") ?? "all");
+    const result = await listPlaces(uid, params.get("trash") === "1", params.get("cursor"), status);
     const pending = result.places.filter((place) => place.extraction === "pending" && !place.deleted).slice(0, 3);
     // 止まった取得の再登録。登録の失敗で一覧表示を止めない。
     await Promise.allSettled(pending.map((place) => dispatchExtraction(uid, place.id)));

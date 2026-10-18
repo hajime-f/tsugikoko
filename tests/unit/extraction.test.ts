@@ -4,7 +4,7 @@ import { analyzePage, extractJsonLd, validateAiFacts, AiLimitError, AiUnavailabl
 import { fetchPageFacts, pageAiText } from "../../src/server/extraction/sources";
 import { geminiRequest, requestGemini } from "../../src/server/extraction/gemini";
 
-const facts = { name: "テストカフェ", address: "東京都渋谷区恵比寿1-2-3" };
+const facts = { name: "テスト店", address: "東京都渋谷区恵比寿1-2-3" };
 const restaurant = { "@type": "Restaurant", ...facts };
 const script = (data: unknown) => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
 const pageText = `${facts.name}\n${facts.address}`;
@@ -18,7 +18,7 @@ test("JSON-LDの配列・@graph・住所参照・重複・壊れた別scriptに�
     { "@id": "#address", "@type": "PostalAddress", addressRegion: "東京都", addressLocality: "渋谷区", streetAddress: "恵比寿1-2-3" },
     restaurant,
   ] })), facts);
-  assert.deepEqual(extractJsonLd(script({ ...restaurant, "@type": ["https://schema.org/CafeOrCoffeeShop", "LocalBusiness"] })), facts);
+  assert.deepEqual(extractJsonLd(script({ ...restaurant, "@type": ["https://schema.org/CafeOrCoffeeShop", "LocalBusiness"] })), { ...facts, genre: "cafe" });
 });
 
 test("複数店舗・住所不足・飲食店以外を勝手に確定しない", () => {
@@ -102,4 +102,26 @@ test("Geminiは構造化出力・短い出力上限を指定し、拒否や途�
   let calls = 0;
   await assert.rejects(requestGemini(pageText, "test-token", "demo-tsugikoko", async () => { calls++; return new Response("unavailable", { status: 429 }); }), AiUnavailableError);
   assert.equal(calls, 1);
+});
+
+test("店舗自身のJSON-LD料理分類を優先し、店舗情報欄・タイトルを補完に使う", async () => {
+  for (const [cuisine, genre] of [["寿司", "sushi"], ["Yakiniku", "yakiniku"], ["焼き鳥", "yakitori"], ["Chinese", "chinese"], ["Italian", "italian"], ["French", "french"]]) {
+    const result = await analyzePage(script({ ...restaurant, servesCuisine: [cuisine] }) + '<table><tr><th>ジャンル</th><td>カフェ</td></tr></table>', () => "", async () => { throw new Error("AI must not run"); });
+    assert.ok(result.facts); assert.equal(result.facts.genre, genre);
+  }
+  const { enrichGenre, cuisineLabels } = await import("../../src/server/extraction/parser");
+  const html = `<title>${facts.name} - 渋谷 / フレンチ</title><nav><dl><dt>ジャンル</dt><dd>焼肉</dd></dl></nav><div itemprop="review"><table><tr><th>ジャンル</th><td>寿司</td></tr></table></div><table><tr><th>ジャンル</th><td>中華</td></tr></table>`;
+  assert.deepEqual(cuisineLabels(html), ["中華"]);
+  assert.equal(enrichGenre(facts, html).genre, "chinese");
+  assert.equal(enrichGenre(facts, `<title>${facts.name} / イタリアン</title>`).genre, "italian");
+  assert.equal(enrichGenre(facts, '<title>別店舗 - 寿司</title><p>おいしい寿司の口コミ</p>').genre, undefined);
+  assert.equal(enrichGenre(facts, '<p>焼肉メニューの紹介文</p>').genre, undefined);
+  assert.ok(pageAiText(`<title>${facts.name}</title><p>${facts.address}</p><dl><dt>料理ジャンル</dt><dd>焼き鳥</dd></dl>`).includes("料理ジャンル: 焼き鳥"));
+});
+
+test("AIの料理分類も元ページの根拠を確認し、未対応・捏造した分類を採用しない", () => {
+  const text = `${pageText}\n料理ジャンル: 寿司`;
+  assert.equal(validateAiFacts({ ...aiResult, cuisine: "寿司", cuisineEvidence: "料理ジャンル: 寿司" }, text)?.genre, "sushi");
+  assert.equal(validateAiFacts({ ...aiResult, cuisine: "焼肉", cuisineEvidence: "料理ジャンル: 焼肉" }, text)?.genre, undefined);
+  assert.equal(validateAiFacts({ ...aiResult, cuisine: null, cuisineEvidence: null }, text)?.genre, undefined);
 });

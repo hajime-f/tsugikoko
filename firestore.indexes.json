@@ -3,5 +3,5 @@
     "collectionGroup": "savedPlaces", "queryScope": "COLLECTION",
     "fields": [{ "fieldPath": "deleted", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
   }],
-  "fieldOverrides": [{ "collectionGroup": "savedPlaces", "fieldPath": "purgeAt", "ttl": true, "indexes": [] }]
+  "fieldOverrides": [{ "collectionGroup": "savedPlaces", "fieldPath": "visits", "indexes": [] }, { "collectionGroup": "savedPlaces", "fieldPath": "purgeAt", "ttl": true, "indexes": [] }]
 }

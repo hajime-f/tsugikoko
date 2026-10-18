@@ -1,13 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bookmark, Check, Coffee, ExternalLink, Link2, LoaderCircle, LockKeyhole, MapPin, Pencil, Plus, RotateCcw, Trash2, UtensilsCrossed } from "lucide-react";
+import { Bookmark, Check, Coffee, ExternalLink, Link2, LoaderCircle, LockKeyhole, MapPin, Pencil, Plus, RotateCcw, Star, Trash2, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { createPlaceSchema, type PlaceList, type SavedPlace } from "@/lib/places/schema";
 
+import { VisitDialog } from "@/components/places/visit-dialog";
+import { genres, isGenre, type Genre } from "@/lib/places/genres";
+
 const cardMotifs = [Coffee, UtensilsCrossed, MapPin, Bookmark];
-function PlaceArtwork({ id }: { id: string }) {
+function PlaceArtwork({ id, genre }: { id: string; genre: Genre | null }) {
+  if (isGenre(genre)) {
+    const item = genres[genre];
+    return <><picture className="place-genre-picture"><source type="image/avif" srcSet={`${item.image}.avif`} /><img src={`${item.image}.webp`} alt={`${item.label}のイメージ写真（実店舗の写真ではありません）`} width={720} height={288} loading="lazy" decoding="async" /></picture><span className="place-genre-caption">{item.label}<small>イメージ</small></span></>;
+  }
   const Motif = cardMotifs[parseInt(id.slice(-4), 16) % cardMotifs.length] ?? Coffee;
   return <span className="place-art" aria-hidden="true"><Motif size={32} strokeWidth={1.5} /></span>;
 }
@@ -26,6 +33,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
   const [saveFailed, setSaveFailed] = useState(false);
   const [message, setMessage] = useState("");
   const [modal, setModal] = useState<{ mode: "edit" | "trash"; place: SavedPlace } | null>(null);
+  const [visitDialog, setVisitDialog] = useState<{ place: SavedPlace; mode: "add" | "history" } | null>(null);
   const [fields, setFields] = useState({ name: "", address: "", note: "" });
   const [modalError, setModalError] = useState("");
   const locked = useRef(false);
@@ -52,7 +60,6 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
   }, [user]);
 
   const reload = useCallback(async (nextCursor: string | null = null, quiet = false) => {
-    if (tab === "visited") { setLoading(false); return; }
     // 自動追加・定期更新を重ねず、明示的な更新は古い応答を無効にする。
     if ((nextCursor || quiet) && fetching.current !== null) return;
     if (quiet && locked.current) return;
@@ -67,7 +74,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       let pagesRead = 0;
       // 更新時も表示済みのページ数を維持。追加・削除で境界がずれても重複させない。
       do {
-        const params = new URLSearchParams({ trash: tab === "trash" ? "1" : "0" });
+        const params = new URLSearchParams({ trash: tab === "trash" ? "1" : "0", status: tab === "trash" ? "all" : tab });
         if (pageCursor) params.set("cursor", pageCursor);
         const result = await api<PlaceList>(`?${params}`);
         if (!active.current || version !== requestVersion.current) return;
@@ -99,7 +106,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
   }, [reload]);
   useEffect(() => {
     const target = loadMoreTarget.current;
-    if (!target || !cursor || loading || loadingMore || busy || pageError || tab === "visited" || !("IntersectionObserver" in window)) return;
+    if (!target || !cursor || loading || loadingMore || busy || pageError || !("IntersectionObserver" in window)) return;
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) void reload(cursor);
     }, { rootMargin: "0px 0px 300px 0px" });
@@ -130,7 +137,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
     catch (cause) {
       if (active.current) {
         setMessage("");
-        (inModal ? setModalError : setError)(cause instanceof Error && cause.name !== "TimeoutError" ? cause.message : "通信が途切れました。同じURLでもう一度お試しください。重複して保存されることはありません。");
+        (inModal ? setModalError : setError)(cause instanceof Error && cause.name !== "TimeoutError" ? cause.message : "通信が途切れました。もう一度お試しください。");
       }
       return false;
     } finally { locked.current = false; if (active.current) setBusy(false); }
@@ -145,7 +152,8 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       if (!active.current) return;
       setMessage(result.restored ? "ごみ箱からマイリストに戻しました。" : result.duplicate ? "このURLは登録済みです。保存済みのお店をご確認ください。" : automatic ? "ログイン前のURLを「行きたい」に保存しました。" : "「行きたい」に保存しました。");
       setUrl(""); onSaved();
-      if (tab !== "saved") setTab("saved"); else await reload();
+      const destination = result.place.visitCount > 0 ? "visited" : "saved";
+      if (tab !== destination) setTab(destination); else await reload();
     });
     if (active.current && !saved) setSaveFailed(true);
   }, [api, onSaved, perform, reload, tab]);
@@ -189,24 +197,25 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       </div> : <p className="trash-description">ごみ箱に移してから30日間、元に戻せます。</p>}
       </div>
       <div role={tab === "trash" ? "region" : "tabpanel"} id="places-panel" aria-labelledby={tab === "trash" ? "my-places-title" : `${tab}-tab`} tabIndex={0} aria-busy={loading || loadingMore}>
-        {tab === "visited" ? <div className="places-empty"><Coffee size={38} /><div className="empty-copy"><h3>「行ってよかった」を、残そう。</h3><p>訪問記録・星5段階の評価機能を準備しています。</p></div></div>
-          : loading && !places.length ? <p className="places-loading" role="status"><LoaderCircle size={20} className="spinning" />マイリストを読み込んでいます...</p>
-          : !places.length && !error ? <div className="places-empty"><div className="empty-illustration" aria-hidden="true"><span className="empty-circle" /><span className="empty-paper"><Coffee size={38} strokeWidth={1.3} /><i /><i /></span><span className="empty-pin"><Bookmark size={22} /></span></div><div className="empty-copy"><h3>{tab === "trash" ? "ごみ箱は空です。" : "最初の「行きたい」を、ここに。"}</h3><p>{tab === "trash" ? "削除した記録は、ここから元に戻せます。" : "お店の公式サイトや、SNSで見つけた投稿。\n気になるURLから、リストをはじめましょう。"}</p>{tab !== "trash" && <a className="text-button" href="#add-place" onClick={() => sourceInput.current?.focus()}>URLを登録する<Plus size={16} /></a>}</div></div>
+        {loading && !places.length ? <p className="places-loading" role="status"><LoaderCircle size={20} className="spinning" />マイリストを読み込んでいます...</p>
+          : !places.length && !error && !cursor ? <div className="places-empty"><div className="empty-illustration" aria-hidden="true"><span className="empty-circle" /><span className="empty-paper"><Coffee size={38} strokeWidth={1.3} /><i /><i /></span><span className="empty-pin"><Bookmark size={22} /></span></div><div className="empty-copy"><h3>{tab === "trash" ? "ごみ箱は空です。" : tab === "visited" ? "「行ってよかった」を、残そう。" : "最初の「行きたい」を、ここに。"}</h3><p>{tab === "trash" ? "削除した記録は、ここから元に戻せます。" : tab === "visited" ? "行きたいリストのお店から、訪問日や星の評価を残せます。" : "お店の公式サイトや、SNSで見つけた投稿。\n気になるURLから、リストをはじめましょう。"}</p>{tab === "visited" && <button className="text-button" onClick={() => setTab("saved")}>行きたいリストを見る</button>}{tab === "saved" && <a className="text-button" href="#add-place" onClick={() => sourceInput.current?.focus()}>URLを登録する<Plus size={16} /></a>}</div></div>
           : <div className="saved-place-grid">{places.map((place) => <article className="saved-place-card" data-tone={parseInt(place.id.slice(-4), 16) % 4} key={place.id} aria-label={place.name || `${place.sourceLabel}の保存URL`}>
-            <div className="saved-place-top"><PlaceArtwork id={place.id} /><span className="place-state">{place.deleted ? "ごみ箱" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>
+            <div className="saved-place-top" data-genre={isGenre(place.genre) ? place.genre : undefined}><PlaceArtwork id={place.id} genre={place.genre} /><span className="place-state">{place.deleted ? "ごみ箱" : place.visitCount > 0 ? "訪問済み" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>
             <h3>{place.name || `${place.sourceLabel}の気になるお店`}</h3>
             {place.address && <p className="place-address">{place.address}</p>}
             {place.extraction !== "ready" && <p className="place-status-copy">{place.extraction === "pending" ? "URLは保存済みです。画面を閉じても取得処理は続きます。" : place.reason === "unsupported" ? "このサイトの自動取得は未対応です。URLは保存されています。" : place.reason === "ai_limit" ? "自動解析の利用上限に達しました。時間をおいて再取得できます。URLは保存されています。" : place.reason === "ai_unavailable" ? "追加の自動解析を現在利用できません。時間をおいて再取得できます。URLは保存されています。" : place.extraction === "failed" ? "店舗情報を取得できませんでした。URLは保存されています。" : "店舗を特定できませんでした。店名・住所はあとから追記できます。"}</p>}
+            {place.latestVisit && <p className="place-visit-summary"><Star size={16} aria-hidden="true" /><span>{place.latestVisit.rating === null ? "未評価" : `${place.latestVisit.rating} / 5`}<small>直近の訪問 {place.latestVisit.visitedOn.replaceAll("-", "/")} · {place.visitCount}回訪問</small></span></p>}
             {place.note && <p className="place-note">{place.note}</p>}
             <div className="place-sources">{place.sourceUrls.map((source) => <a key={source} href={source} target="_blank" rel="noopener noreferrer" className="place-source"><span>{source === place.url ? place.sourceLabel : new URL(source).hostname}で見る<small>{source}</small></span><ExternalLink size={15} /></a>)}</div>
             <p className="place-date">{place.deleted ? `${new Date(place.deleteAt!).toLocaleDateString("ja-JP")}まで復元できます` : place.fetchedAt ? `店舗情報の取得: ${new Date(place.fetchedAt).toLocaleDateString("ja-JP")}` : `保存: ${new Date(place.createdAt).toLocaleDateString("ja-JP")}`}</p>
+            <div className="place-visit-actions">{!place.deleted && <button className="button button-dark" disabled={busy} onClick={() => setVisitDialog({ place, mode: "add" })}><Check size={16} />{place.visitCount > 0 ? "再訪を記録" : "行ってきた"}</button>}{place.visitCount > 0 && <button className="text-button" disabled={busy} onClick={() => setVisitDialog({ place, mode: "history" })}>訪問履歴（{place.visitCount}）</button>}</div>
             <div className="place-actions">{place.deleted ? <button disabled={busy} onClick={() => void action(place, "restore")}><RotateCcw size={15} />元に戻す</button> : <>
               <button disabled={busy} onClick={() => edit(place)}><Pencil size={15} />編集</button>
               {place.reason !== "unsupported" && <button disabled={busy || place.extraction === "pending"} onClick={() => void action(place, "retry")}><RotateCcw size={15} />再取得</button>}
               <button disabled={busy} aria-label={`${place.name || place.sourceLabel}をごみ箱へ移す`} onClick={() => { setModalError(""); setModal({ mode: "trash", place }); }}><Trash2 size={15} />削除</button>
             </>}</div>
           </article>)}</div>}
-        {cursor && tab !== "visited" && <div ref={loadMoreTarget} className="places-more" aria-label="リストの続き">
+        {cursor && <div ref={loadMoreTarget} className="places-more" aria-label="リストの続き">
           {loadingMore ? <p className="places-loading" role="status"><LoaderCircle size={20} className="spinning" />続きを読み込んでいます...</p> : <>
             {pageError && <p className="places-error" role="alert">{pageError}</p>}
             <button className="button button-login" disabled={loading || busy} onClick={() => void reload(cursor)}>{pageError ? "続きを再読み込み" : "もっと見る"}</button>
@@ -215,6 +224,12 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       </div>
     </section>
 
+    {visitDialog && <VisitDialog key={visitDialog.place.id} place={visitDialog.place} initialMode={visitDialog.mode} api={api}
+      onClose={() => setVisitDialog(null)} onBusy={setBusy} onChange={updated => {
+        setVisitDialog(current => current ? { ...current, place: updated } : null);
+        const destination = updated.visitCount > 0 ? "visited" : "saved";
+        if (tab !== destination) setTab(destination); else void reload();
+      }} />}
     <Dialog open={Boolean(modal)} onOpenChange={(open) => { if (!open && !busy) setModal(null); }}>
       <DialogContent>
         <DialogTitle className="dialog-title">{modal?.mode === "edit" ? "お店の情報を編集" : "ごみ箱へ移しますか？"}</DialogTitle>

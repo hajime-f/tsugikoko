@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Genre } from "./genres";
 
 export function normalizePlaceUrl(value: string): string {
   const url = new URL(value.trim());
@@ -40,6 +41,28 @@ export const editPlaceSchema = z.object({
 }).strict();
 export const actionSchema = z.object({ action: z.enum(["retry", "trash", "restore"]) }).strict();
 
+export const MAX_VISITS = 100;
+export function todayInJapan() { return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); }
+export const visitFieldsSchema = z.object({
+  visitedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "訪問日を入力してください。").refine(value => {
+    const date = new Date(`${value}T00:00:00Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value && value >= "1900-01-01" && value <= todayInJapan();
+  }, "訪問日は1900年以降の実在する日付で、今日以前を指定してください。"),
+  rating: z.number().int().min(1).max(5).nullable(),
+  comment: z.string().trim().max(2000, "感想は2,000文字以内で入力してください。"),
+}).strict();
+export const visitActionSchema = z.discriminatedUnion("action", [
+  visitFieldsSchema.extend({ action: z.literal("addVisit"), visitId: z.uuid() }).strict(),
+  visitFieldsSchema.extend({ action: z.literal("editVisit"), visitId: z.uuid(), updatedAt: z.number().int().nonnegative() }).strict(),
+  z.object({ action: z.literal("deleteVisit"), visitId: z.uuid(), updatedAt: z.number().int().nonnegative() }).strict(),
+]);
+export type VisitAction = z.infer<typeof visitActionSchema>;
+export type Visit = z.infer<typeof visitFieldsSchema> & { id: string; createdAt: number; updatedAt: number };
+export type VisitSummary = Pick<Visit, "id" | "visitedOn" | "rating">;
+export function sortVisits(visits: Visit[]): Visit[] {
+  return [...visits].sort((a, b) => b.visitedOn.localeCompare(a.visitedOn) || b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+}
+
 export type SavedPlace = {
   id: string; placeId: string | null; url: string; sourceUrls: string[];
   name: string; address: string; note: string; customDetails: boolean;
@@ -47,8 +70,10 @@ export type SavedPlace = {
   reason: "unsupported" | "not_found" | "fetch_failed" | "ai_unavailable" | "ai_limit" | null;
   sourceLabel: string; fetchedAt: number | null; createdAt: number; updatedAt: number;
   lastAttemptAt: number | null; deleted: boolean; deleteAt: number | null; visibility: "private";
+  visitCount: number; latestVisit: VisitSummary | null; genre: Genre | null;
 };
 export type PlaceList = { places: SavedPlace[]; nextCursor: string | null };
+export type VisitList = { visits: Visit[]; nextCursor: string | null };
 
 export function sourceLabel(url: string) {
   const host = new URL(url).hostname;

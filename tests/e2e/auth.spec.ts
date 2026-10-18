@@ -38,7 +38,7 @@ test("ログイン後にURLを自動保存し、再読込・別タブ・再登�
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("home.png"), fullPage: true });
   await page.getByRole("tab", { name: "訪問済み" }).click();
-  await expect(page.getByRole("tabpanel")).toContainText("訪問記録・星5段階の評価機能を準備しています");
+  await expect(page.getByRole("tabpanel")).toContainText("行きたいリストのお店から、訪問日や星の評価を残せます。");
   await page.reload();
   await expect(page.getByRole("article")).toHaveCount(1);
   expect(saves).toBe(1);

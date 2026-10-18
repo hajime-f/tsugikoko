@@ -20,7 +20,7 @@ function listFixtures(count: number): SavedPlace[] {
     name: `カフェ ${index + 1}`, address: "東京都渋谷区テスト1-2-3", note: "", customDetails: false,
     extraction: "ready", reason: null, sourceLabel: "example.com", fetchedAt: Date.now(),
     createdAt: Date.now() - index * 1000, updatedAt: Date.now(), lastAttemptAt: null,
-    deleted: false, deleteAt: null, visibility: "private",
+    deleted: false, deleteAt: null, visibility: "private", visitCount: 0, latestVisit: null, genre: null,
   }));
 }
 
@@ -158,7 +158,7 @@ test("自動補完の結果を保存し、未認証・他ユーザーのアク�
   const other = await otherResponse.json();
   const headers = { Authorization: `Bearer ${owner.idToken}` };
   // 取得元への負荷を避け、検証用の取得済み事実をエミュレーターにだけ投入する。
-  await db().doc(`placeSources/${createHash("sha256").update(official).digest("hex")}`).set({ name: "検証用ビストロ", address: "東京都渋谷区テスト1-2-3", fetchedAt: Date.now(), provenance: { version: "json-ld-ai-v1", method: "json-ld-v1" } });
+  await db().doc(`placeSources/${createHash("sha256").update(official).digest("hex")}`).set({ name: "検証用ビストロ", address: "東京都渋谷区テスト1-2-3", genre: null, fetchedAt: Date.now(), provenance: { version: "json-ld-ai-v1", method: "json-ld-v1" } });
   expect((await request.get("/api/places")).status()).toBe(401);
   expect((await request.post("/api/places", { data: { url: official } })).status()).toBe(401);
   expect((await request.get("/api/places", { headers: { Authorization: "Bearer invalid" } })).status()).toBe(401);
@@ -193,4 +193,118 @@ test("自動補完の結果を保存し、未認証・他ユーザーのアク�
   expect((await request.patch(`/api/places/${place.id}`, { headers, data: { action: "restore" } })).status()).toBe(404);
   await db().doc(`users/${owner.localId}/limits/writes`).set({ minute: Math.floor(Date.now() / 60000), perMinute: 20, day: Math.floor(Date.now() / 86400000), perDay: 20 });
   expect((await request.post("/api/places", { headers, data: { url: tabelog } })).status()).toBe(429);
+});
+
+test("訪問と再訪を記録し、通信失敗の再試行・履歴の編集・削除・再読み込みを確認する", async ({ page }, info) => {
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `visits-${info.project.name}-${Date.now()}@example.test`);
+  await page.getByLabel("登録するお店や投稿のURL").fill(unsupported);
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  const card = page.getByRole("article", { name: "Instagramの保存URL" });
+  await card.getByRole("button", { name: "行ってきた", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("訪問日", { exact: true }).fill("2024-03-01");
+  await dialog.getByRole("radio", { name: "4つ星", exact: true }).check();
+  // サーバーでは保存が完了し、応答だけ失われた場合でも再送で記録を増やさない。
+  let fail = true;
+  await page.route("**/api/places/*", async route => {
+    if (route.request().method() === "PATCH" && route.request().postDataJSON().action === "addVisit" && fail) {
+      fail = false;
+      expect((await route.fetch()).status()).toBe(200);
+      await route.fulfill({ status: 503, json: { error: "保存結果を確認できませんでした。" } });
+    } else await route.continue();
+  });
+  await dialog.getByRole("button", { name: "訪問を記録する", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("保存結果を確認できませんでした。");
+  await expect(dialog.getByLabel("訪問日", { exact: true })).toHaveValue("2024-03-01");
+  await dialog.getByRole("button", { name: "訪問を記録する", exact: true }).click();
+  await expect(dialog.getByRole("listitem")).toHaveCount(1);
+  await expect(dialog).toContainText("4 / 5");
+  await dialog.getByRole("button", { name: "閉じる", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "訪問済み", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(card).toContainText("1回訪問");
+  await page.getByRole("tab", { name: "行きたい", exact: true }).click();
+  await expect(page.getByRole("article")).toHaveCount(0);
+  await page.getByRole("tab", { name: "訪問済み", exact: true }).click();
+  await card.getByRole("button", { name: "再訪を記録", exact: true }).click();
+  await dialog.getByLabel("訪問日", { exact: true }).fill("2024-03-02");
+  await dialog.getByLabel("感想（任意）", { exact: true }).fill("コーヒーがおいしかった。また行きたい。");
+  await expect(dialog.getByRole("radio", { name: "未評価", exact: true })).toBeChecked();
+  await page.screenshot({ path: info.outputPath("visit-form.png"), animations: "disabled" });
+  await dialog.getByRole("button", { name: "訪問を記録する", exact: true }).click();
+  await expect(dialog.getByRole("listitem")).toHaveCount(2);
+  await expect(dialog.getByRole("listitem").first()).toContainText("未評価");
+  await dialog.getByRole("listitem").first().getByRole("button", { name: "記録を編集", exact: true }).click();
+  await dialog.getByRole("radio", { name: "5つ星", exact: true }).check();
+  await dialog.getByRole("button", { name: "変更を保存", exact: true }).click();
+  await expect(dialog.getByRole("listitem").first()).toContainText("5 / 5");
+  await expect(dialog.getByRole("listitem")).toHaveCount(2);
+  await page.screenshot({ path: info.outputPath("visit-history.png"), animations: "disabled" });
+  await dialog.getByRole("button", { name: "閉じる", exact: true }).click();
+  await page.reload();
+  await page.getByRole("tab", { name: "訪問済み", exact: true }).click();
+  await expect(card).toContainText("2回訪問");
+  await expect(card).toContainText("5 / 5");
+  await card.getByRole("button", { name: "訪問履歴（2）", exact: true }).click();
+  for (const remaining of [1, 0]) {
+    await dialog.getByRole("listitem").first().getByRole("button", { name: "記録を削除", exact: true }).click();
+    await dialog.getByRole("button", { name: "この訪問記録を削除", exact: true }).click();
+    await expect(dialog.getByRole("listitem")).toHaveCount(remaining);
+  }
+  await dialog.getByRole("button", { name: "閉じる", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "行きたい", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(card.getByRole("button", { name: "行ってきた", exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("訪問APIは本人だけに履歴を返し、評価と日付・所有者の改ざんを拒否する", async ({ request }, info) => {
+  async function account(prefix: string) {
+    return (await request.post("http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key", { data: { email: `${prefix}-${info.project.name}-${Date.now()}@example.test`, password: "test-password-123", returnSecureToken: true } })).json();
+  }
+  const owner = await account("visit-owner"), other = await account("visit-other");
+  const headers = { Authorization: `Bearer ${owner.idToken}` }, otherHeaders = { Authorization: `Bearer ${other.idToken}` };
+  const { place } = await (await request.post("/api/places", { headers, data: { url: unsupported } })).json();
+  const path = `/api/places/${place.id}`;
+  const input = { action: "addVisit", visitId: "12345678-1234-4123-8123-123456789abc", visitedOn: "2024-03-01", rating: 5, comment: "本人だけの感想" };
+  expect((await request.patch(path, { data: input })).status()).toBe(401);
+  expect((await request.patch(path, { headers: otherHeaders, data: input })).status()).toBe(404);
+  for (const invalid of [{ rating: 6 }, { rating: 4.5 }, { visitedOn: "2024-02-30" }, { visitedOn: "9999-01-01" }, { uid: other.localId }, { visibility: "public" }]) {
+    expect((await request.patch(path, { headers, data: { ...input, ...invalid } })).status()).toBe(400);
+  }
+  expect((await request.patch(path, { headers, data: input })).status()).toBe(200);
+  expect((await request.get(path)).status()).toBe(401);
+  expect((await request.get(path, { headers: otherHeaders })).status()).toBe(404);
+  const result = await request.get(path, { headers });
+  expect(result.headers()["cache-control"]).toContain("private, no-store");
+  expect((await result.json()).visits).toMatchObject([{ comment: input.comment, rating: 5 }]);
+  const visited = (await (await request.get("/api/places?status=visited", { headers })).json()).places;
+  expect(visited).toMatchObject([{ visitCount: 1, latestVisit: { rating: 5 }, visibility: "private" }]);
+  expect(visited[0].visits).toBeUndefined();
+  expect((await (await request.get("/api/places?status=saved", { headers })).json()).places).toEqual([]);
+  expect((await (await request.get("/api/places?status=visited", { headers: otherHeaders })).json()).places).toEqual([]);
+});
+
+test("ジャンルごとの軽量画像を遅延読み込みし、不明な店舗は従来の装飾を表示する", async ({ page }, info) => {
+  const { genres } = await import("../../src/lib/places/genres");
+  const entries = Object.entries(genres);
+  const places = listFixtures(entries.length + 1).map((place, index) => ({ ...place, name: entries[index] ? `画像テスト ${entries[index][1].label}` : "ジャンル不明の店", genre: entries[index]?.[0] ?? null }));
+  await page.route("**/api/places?*", route => route.fulfill({ json: { places, nextCursor: null } }));
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `genre-images-${info.project.name}-${Date.now()}@example.test`);
+  await expect(page.getByRole("article")).toHaveCount(entries.length + 1);
+  for (const [, genre] of entries) {
+    const card = page.getByRole("article", { name: `画像テスト ${genre.label}`, exact: true });
+    await card.scrollIntoViewIfNeeded();
+    const img = card.getByRole("img", { name: `${genre.label}のイメージ写真（実店舗の写真ではありません）`, exact: true });
+    await expect(img).toHaveAttribute("loading", "lazy");
+    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
+    await expect.poll(() => img.evaluate((el: HTMLImageElement) => new URL(el.currentSrc).pathname)).toBe(`${genre.image}.avif`);
+    await expect(card.locator(".place-genre-caption")).toContainText(genre.label);
+  }
+  const unknown = page.getByRole("article", { name: "ジャンル不明の店", exact: true });
+  await expect(unknown.locator("img")).toHaveCount(0);
+  await expect(unknown.locator(".place-art")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("article").first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath("genre-cards.png"), animations: "disabled" });
 });

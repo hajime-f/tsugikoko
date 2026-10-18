@@ -68,8 +68,8 @@ export function HomePage() {
         <div className="member-hero-photo"><HeroImage /><span className="member-photo-note"><Coffee size={16} />次の週末、どこに行こう。</span></div>
       </section>
 
-      <PlacesSection key={user.uid} draft={draft} onSaved={onSaved} revision={placesRevision} onChanged={onPlacesChanged}
-        beforeList={<RecommendationsSection revision={recommendationsRevision} onSaved={onRecommendationSaved} onSettings={() => setModal("recommendations")} />} />
+      <RecommendationsSection key={`recommendations-${user.uid}`} revision={recommendationsRevision} onSaved={onRecommendationSaved} onSettings={() => setModal("recommendations")} />
+      <PlacesSection key={user.uid} draft={draft} onSaved={onSaved} revision={placesRevision} onChanged={onPlacesChanged} />
       <footer className="member-footer"><span>気になったら、ツギココ。</span><button onClick={openAccount}>アカウント設定<ArrowRight size={14} /></button></footer>
     </main>
     <nav className="member-bottom-nav" aria-label="モバイルナビゲーション"><a href="#member-main" aria-current="page"><House size={21} /><span>ホーム</span></a><a href="#my-places"><Bookmark size={21} /><span>マイリスト</span></a><a href="#for-you"><Sparkles size={21} /><span>おすすめ</span></a><button onClick={openAccount}><UserRound size={21} /><span>アカウント</span></button></nav>
@@ -92,7 +92,7 @@ export function HomePage() {
           <h3 className="account-heading">おすすめ</h3><button className="text-button" onClick={() => setModal("recommendations")}>おすすめの利用方針・興味なしの管理<ChevronRight size={16} /></button>
           <button className="logout-button" disabled={auth.busy} onClick={async () => { loggingOut.current = true; if (await auth.logout()) router.replace("/"); else loggingOut.current = false; }}>{auth.busy ? <LoaderCircle size={18} className="spinning" /> : <LogOut size={18} />}ログアウト</button>
         </> : modal === "recommendations" ? <>
-          <DialogTitle className="dialog-title">おすすめ設定</DialogTitle><DialogDescription className="dialog-description">推薦への利用と、表示しないお店を管理します。</DialogDescription>
+          <DialogTitle className="dialog-title">おすすめ設定</DialogTitle><DialogDescription className="dialog-description">探したいエリアと、表示しないお店を管理します。</DialogDescription>
           <RecommendationSettings onChanged={onPlacesChanged} />
         </> : <>
           <span className="modal-brand"><Bookmark size={28} /></span><DialogTitle className="dialog-title">「行きたい」を、忘れない。</DialogTitle><DialogDescription className="dialog-description">URLからはじまる、次のお出かけ。</DialogDescription>

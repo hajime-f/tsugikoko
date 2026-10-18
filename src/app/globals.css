@@ -363,7 +363,7 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .home-greeting > p { display: flex; align-items: baseline; gap: 9px; font-size: 13px; margin: 0; overflow-wrap: anywhere; }
 .status-dot { height: 6px; width: 6px; flex-shrink: 0; border-radius: 50%; background: var(--green); }
 .private-badge { display: inline-flex; gap: 5px; align-items: center; font-size: 11px; color: var(--muted); flex-shrink: 0; }
-.member-hero { display: grid; grid-template-columns: 1.1fr 1fr; background: var(--cream); overflow: hidden; border-radius: 9px; }
+.member-hero { margin-bottom: 36px; display: grid; grid-template-columns: 1.1fr 1fr; background: var(--cream); overflow: hidden; border-radius: 9px; }
 .member-hero-copy { padding: 47px 44px; }
 .member-hero h1 { font-size: clamp(32px, 3.5vw, 48px); letter-spacing: -1.5px; line-height: 1.45; font-weight: 800; margin: 0 0 18px; }
 .member-hero-copy > p:not(.eyebrow) { color: #515d4d; font-size: 13px; line-height: 1.9; margin: 0 0 26px; }
@@ -465,7 +465,7 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
   .home-greeting { margin-bottom: 18px; }
   .home-greeting > p { font-size: 12px; }
   .home-greeting > .private-badge { display: none; }
-  .member-hero { grid-template-columns: 1fr; }
+  .member-hero { grid-template-columns: 1fr; margin-bottom: 26px; }
   .member-hero-photo { min-height: 170px; height: 170px; grid-row: 1; }
   .member-hero-photo img { object-position: center 48%; }
   .member-photo-note { bottom: 14px; right: 14px; padding: 8px 11px; font-size: 10px; }
@@ -694,4 +694,27 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
   .recommendations-heading h2 { font-size: 21px; }
   .recommendations-heading > button { font-size: 12px; }
   .recommendation-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+}
+
+/* おすすめの利用エリア */
+.recommendation-area { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; margin: 16px 0; background: #fff9; border: 1px solid #dce5d5; border-radius: 14px; }
+.recommendation-area > span { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 14px; }
+.recommendation-area svg { flex-shrink: 0; }
+.recommendation-area button { flex-shrink: 0; min-height: 44px; }
+.area-settings { padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.area-current { padding: 10px 12px; border-radius: 10px; background: #eef3e7; font-weight: 700; }
+.area-privacy, .area-source { color: #626960; font-size: 12px; line-height: 1.8; }
+.area-source a { text-decoration: underline; text-underline-offset: 3px; }
+.area-locate { margin: 12px 0 18px; }
+.area-selects { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; margin-bottom: 16px; }
+.area-selects label { display: grid; gap: 7px; min-width: 0; font-size: 13px; font-weight: 700; }
+.area-selects select { width: 100%; min-width: 0; min-height: 48px; padding: 10px; border: 1px solid #cbd3c6; border-radius: 10px; background: #fff; color: var(--ink); font: inherit; font-size: 16px; }
+.area-selects select:focus-visible { outline: 2px solid #526b40; outline-offset: 2px; }
+.area-error { color: #9f3027; }
+.area-notice { color: #36562b; }
+.area-broaden { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+@media (max-width: 700px) {
+  .recommendation-area { padding: 8px 12px; }
+  .area-selects { grid-template-columns: 1fr; }
+  .area-settings form > button, .area-locate { width: 100%; }
 }

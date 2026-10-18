@@ -4,17 +4,18 @@ import { createHash, randomUUID } from "node:crypto";
 import { database } from "../../src/server/firebase/admin";
 import { saveCommonPlace } from "../../src/server/places/service";
 import { listDismissed, listRecommendations, recommendedPlace, setDismissed } from "../../src/server/recommendations/service";
+import { getArea, setArea } from "../../src/server/areas/service";
 
 if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.GCLOUD_PROJECT !== "demo-tsugikoko") throw new Error("Local demo emulator required");
 
 const run = randomUUID().slice(0, 8);
 const placeId = (name: string) => createHash("sha256").update(`${run}:${name}`).digest("hex");
-const P = Object.fromEntries(["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10"].map(name => [name, placeId(name)])) as Record<string, string>;
+const P = Object.fromEntries(["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10", "p11", "p12"].map(name => [name, placeId(name)])) as Record<string, string>;
 const uid = (name: string) => `rec-${run}-${name}`;
 
-async function common(name: string, fields: { genre?: string; method?: string; url?: string } = {}) {
+async function common(name: string, fields: { genre?: string; method?: string; url?: string; address?: string } = {}) {
   await database().doc(`places/${P[name]}`).set({
-    name: `共通店舗${name}`, address: `東京都渋谷区恵比寿${name.slice(1)}-1-1`, genre: fields.genre ?? null,
+    name: `共通店舗${name}`, address: fields.address ?? `東京都渋谷区恵比寿${name.slice(1)}-1-1`, genre: fields.genre ?? null,
     provenance: { url: fields.url ?? `https://${run}-${name}.example.com/`, version: "json-ld-v2", method: fields.method ?? "json-ld-v1", fetchedAt: Date.now() },
   });
 }
@@ -112,5 +113,61 @@ test("集計が一度もできていない間の作成中・失敗後の待機�
   } finally {
     await database().doc("recommendationModel/lock").delete();
     if (saved.exists) await database().doc("recommendationModel/current").set(saved.data()!);
+  }
+});
+
+test("利用エリアで推薦を絞り、変更すると即座に作り直し、別の地域のカーソルを混ぜない", async () => {
+  await common("p11", { address: "大阪府大阪市北区梅田1-1-1" });
+  await common("p12", { address: "住所非公開" });
+  for (const owner of ["q", "r", "s"]) { await saved(owner, "p11"); await saved(owner, "p12"); }
+  await database().doc("recommendationModel/current").delete(); await database().doc("recommendationModel/lock").delete();
+  const ours = async () => (await listRecommendations(uid("me"), null)).items.map(item => item.id).filter(id => Object.values(P).includes(id));
+
+  assert.equal(await getArea(uid("me")), null);
+  const nationwide = await ours();
+  assert.ok(nationwide.includes(P.p11) && nationwide.includes(P.p12) && nationwide.includes(P.p3));
+  assert.equal((await listRecommendations(uid("me"), null)).area, null);
+
+  assert.deepEqual(await setArea(uid("me"), { prefectureCode: "27", municipalityCode: "27100" }), { prefectureCode: "27", municipalityCode: "27100" });
+  // 大阪市を選ぶと北区の店舗を含み、住所が分からない店舗・東京の店舗は含まない。
+  assert.deepEqual(await ours(), [P.p11]);
+  const osaka = await listRecommendations(uid("me"), null);
+  assert.deepEqual(osaka.area, { prefectureCode: "27", municipalityCode: "27100" });
+
+  await setArea(uid("me"), { prefectureCode: "13", municipalityCode: null });
+  const tokyo = await ours();
+  assert.equal(tokyo.includes(P.p11) || tokyo.includes(P.p12), false);
+  assert.ok(tokyo.includes(P.p3));
+  // 地域を変えたあとに、前の地域のカーソルを使えない。
+  await assert.rejects(listRecommendations(uid("me"), `27100:${P.p11}`), /おすすめが更新されました/);
+  // 保存されるのは地域コードだけ。
+  assert.deepEqual(Object.keys((await database().doc(`users/${uid("me")}/preferences/area`).get()).data()!).sort(), ["municipalityCode", "prefectureCode", "updatedAt"]);
+
+  await setArea(uid("me"), null);
+  assert.equal((await database().doc(`users/${uid("me")}/preferences/area`).get()).exists, false);
+  assert.ok((await ours()).includes(P.p11));
+});
+
+test("地域コードのない旧モデルは使わず作り直しを待ち、集計後に住所が変わった店舗は地域外として表示しない", async () => {
+  const current = database().doc("recommendationModel/current"), lock = database().doc("recommendationModel/lock");
+  const saved = await current.get();
+  try {
+    // 旧バージョンのモデルが新しくても使わず、作り直し中は503にする。
+    await current.set({ generatedAt: Date.now(), version: 1, data: JSON.stringify({ truncated: false, candidates: [], places: [], profiles: {} }) });
+    await lock.set({ lockedUntil: Date.now() + 60_000, token: "other" });
+    await assert.rejects(listRecommendations(uid("old-model"), null), (error: Error & { status?: number }) => error.status === 503);
+  } finally {
+    await lock.delete();
+    if (saved.exists) await current.set(saved.data()!); else await current.delete();
+  }
+  await setArea(uid("me"), { prefectureCode: "27", municipalityCode: "27100" });
+  try {
+    assert.ok((await listRecommendations(uid("me"), null)).items.some(item => item.id === P.p11));
+    // 集計し直す前に共通店舗の住所が東京に変わっても、大阪市のおすすめには出さない。
+    await database().doc(`places/${P.p11}`).update({ address: "東京都渋谷区恵比寿11-1-1" });
+    assert.equal((await listRecommendations(uid("me"), null)).items.some(item => item.id === P.p11), false);
+  } finally {
+    await database().doc(`places/${P.p11}`).update({ address: "大阪府大阪市北区梅田1-1-1" });
+    await setArea(uid("me"), null);
   }
 });

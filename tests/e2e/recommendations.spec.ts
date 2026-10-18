@@ -149,6 +149,18 @@ test("実APIで他ユーザーの保存から推薦し、個人の追記を漏�
   const card = section.getByRole("article", { name: `おすすめ：${shared[2].name}`, exact: true });
   await expect(card).toBeAttached();
   await expect(card).toContainText("保存・評価の傾向が近い人から");
+  await section.getByRole("button", { name: "エリアを変更" }).click();
+  const areaDialog = page.getByRole("dialog");
+  await areaDialog.getByRole("combobox", { name: "都道府県", exact: true }).selectOption("13");
+  await areaDialog.getByRole("combobox", { name: "市区町村", exact: true }).selectOption("13103");
+  await areaDialog.getByRole("button", { name: "エリアを保存", exact: true }).click();
+  await expect(areaDialog.getByText("東京都 港区でおすすめを探します。")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await expect(section.locator(".recommendation-area")).toContainText("東京都 港区");
+  await expect(card).toBeAttached();
+  const preference = (await database.doc(`users/${owner.uid}/preferences/area`).get()).data()!;
+  expect(preference).toEqual({ prefectureCode: "13", municipalityCode: "13103", updatedAt: expect.any(Number) });
   await card.getByRole("button", { name: "行きたいに保存" }).click();
   await expect(card).toHaveCount(0);
   await expect(page.locator("#my-places").getByRole("article", { name: shared[2].name, exact: true })).toBeAttached();
@@ -156,6 +168,82 @@ test("実APIで他ユーザーの保存から推薦し、個人の追記を漏�
   expect(stored.size).toBe(1);
   expect(stored.docs[0].get("note")).toBe("");
   expect(stored.docs[0].get("name")).toBe(shared[2].name);
+  expect((await request.get("/api/preferences/area")).status()).toBe(401);
+  expect((await request.patch("/api/preferences/area", { data: { area: null } })).status()).toBe(401);
   expect((await request.get("/api/recommendations")).status()).toBe(401);
   expect((await request.post("/api/recommendations", { data: { action: "save", id: shared[2].id } })).status()).toBe(401);
+});
+
+test("エリアを手動で保存し、候補不足では範囲を広げる。保存失敗でも選択を残す", async ({ page }, info) => {
+  let area: { prefectureCode: string; municipalityCode: string | null } | null = null;
+  let failSave = true;
+  const patches: unknown[] = [];
+  await page.route("**/api/places?*", route => route.fulfill({ json: { places: [], nextCursor: null } }));
+  await page.route("**/api/preferences/area", async route => {
+    if (route.request().method() === "PATCH") {
+      const body = route.request().postDataJSON(); patches.push(body);
+      if (failSave) { failSave = false; await route.fulfill({ status: 503, json: { error: "一時的な障害" } }); return; }
+      area = body.area;
+    }
+    await route.fulfill({ json: { area } });
+  });
+  await page.route(/\/api\/recommendations(?:\?|$)/, route => route.fulfill({ json: { items: [], nextCursor: null, generatedAt: Date.now(), mode: "insufficient", area } }));
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `area-manual-${info.project.name}-${Date.now()}@example.test`);
+  const section = page.locator("#for-you"), dialog = page.getByRole("dialog");
+  await section.getByRole("button", { name: "エリアを変更" }).click();
+  await dialog.getByRole("combobox", { name: "都道府県", exact: true }).selectOption("13");
+  await dialog.getByRole("combobox", { name: "市区町村", exact: true }).selectOption("13113");
+  await dialog.getByRole("button", { name: "エリアを保存", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("エリアを保存できませんでした");
+  await expect(dialog.getByRole("combobox", { name: "市区町村", exact: true })).toHaveValue("13113");
+  await dialog.getByRole("button", { name: "エリアを保存", exact: true }).click();
+  await expect(dialog.getByText("東京都 渋谷区でおすすめを探します。")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("area-settings.png") });
+  await page.keyboard.press("Escape");
+  await expect(section.locator(".recommendation-area")).toContainText("東京都 渋谷区");
+  await section.getByRole("button", { name: "東京都全域に広げる" }).click();
+  await expect(section.locator(".recommendation-area")).toContainText("東京都全域");
+  await section.getByRole("button", { name: "全国で探す" }).click();
+  await expect(section.locator(".recommendation-area")).toContainText("全国");
+  expect(patches).toEqual([{ area: { prefectureCode: "13", municipalityCode: "13113" } }, { area: { prefectureCode: "13", municipalityCode: "13113" } }, { area: { prefectureCode: "13", municipalityCode: null } }, { area: null }]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("現在地の地域候補は確認してから保存し、位置の許可がないときは手動で続ける", async ({ page, context }, info) => {
+  const coords = { latitude: 35.65856789, longitude: 139.70123456, accuracy: 20 };
+  await context.setGeolocation(coords); await context.grantPermissions(["geolocation"]);
+  let area: { prefectureCode: string; municipalityCode: string | null } | null = null;
+  const patches: unknown[] = [], geoQueries: string[] = [];
+  await page.route("**/api/places?*", route => route.fulfill({ json: { places: [], nextCursor: null } }));
+  await page.route("**/api/preferences/area", async route => {
+    if (route.request().method() === "PATCH") { const body = route.request().postDataJSON(); patches.push(body); area = body.area; }
+    await route.fulfill({ json: { area } });
+  });
+  await page.route(/\/api\/recommendations(?:\?|$)/, route => route.fulfill({ json: { items: [], nextCursor: null, generatedAt: Date.now(), mode: "insufficient", area } }));
+  await page.route("https://mreversegeocoder.gsi.go.jp/**", async route => { geoQueries.push(route.request().url()); await route.fulfill({ json: { results: { muniCd: "13113", lv01Nm: "UNUSED_DETAIL" } } }); });
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `area-location-${info.project.name}-${Date.now()}@example.test`);
+  await page.locator("#for-you").getByRole("button", { name: "エリアを変更" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("button", { name: "現在地から設定" })).toBeVisible();
+  expect(geoQueries).toHaveLength(0);
+  await dialog.getByRole("button", { name: "現在地から設定" }).click();
+  await expect(dialog.getByRole("combobox", { name: "市区町村", exact: true })).toHaveValue("13113");
+  expect(patches).toHaveLength(0);
+  expect(geoQueries).toHaveLength(1);
+  const query = new URL(geoQueries[0]).searchParams;
+  expect(query.get("lat")).toBe("35.659"); expect(query.get("lon")).toBe("139.701");
+  await dialog.getByRole("button", { name: "エリアを保存", exact: true }).click();
+  await expect(dialog.getByText("東京都 渋谷区でおすすめを探します。")).toBeVisible();
+  expect(patches).toEqual([{ area: { prefectureCode: "13", municipalityCode: "13113" } }]);
+  await page.evaluate(() => { navigator.geolocation.getCurrentPosition = (_success, failure) => failure?.({ code: 1, message: "denied", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }); });
+  await dialog.getByRole("button", { name: "現在地から設定" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("現在地からエリアを確認できませんでした");
+  expect(geoQueries).toHaveLength(1);
+  await dialog.getByRole("combobox", { name: "都道府県", exact: true }).selectOption("26");
+  await expect(dialog.getByRole("combobox", { name: "市区町村", exact: true })).toHaveValue("");
+  await dialog.getByRole("combobox", { name: "市区町村", exact: true }).selectOption("26100");
+  await dialog.getByRole("button", { name: "エリアを保存", exact: true }).click();
+  await expect(dialog.getByText("京都府 京都市でおすすめを探します。")).toBeVisible();
 });

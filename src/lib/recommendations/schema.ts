@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Genre } from "../places/genres";
+import type { Area } from "../areas/schema";
 
 // similar_tastes: 保存が重なる他ユーザー（3人以上）が保存・高評価している。
 // preferred_genre: 本人がよく保存するジャンルで、3人以上が保存している。
@@ -10,7 +11,8 @@ export type Recommendation = { id: string; name: string; address: string; genre:
 export type DismissedRecommendation = Omit<Recommendation, "reason">;
 // personalized: 好みが近い人からの推薦を含む。fallback: ジャンル・人気の候補だけ。insufficient: 候補なし。
 export type RecommendationMode = "personalized" | "fallback" | "insufficient";
-export type RecommendationList = { items: Recommendation[]; nextCursor: string | null; generatedAt: number | null; mode: RecommendationMode };
+// areaは推薦に使った利用エリア（nullは全国）。
+export type RecommendationList = { items: Recommendation[]; nextCursor: string | null; generatedAt: number | null; mode: RecommendationMode; area: Area | null };
 export type DismissedRecommendationList = { items: DismissedRecommendation[]; nextCursor: string | null };
 
 export const recommendationIdSchema = z.string().regex(/^[a-f0-9]{64}$/, "おすすめが見つかりません。画面を再読み込みしてください。");

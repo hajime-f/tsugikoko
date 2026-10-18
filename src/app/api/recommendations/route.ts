@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   try {
     const uid = await authenticatedUid(request), params = new URL(request.url).searchParams;
     const cursor = params.get("cursor");
-    return jsonResponse(params.get("dismissed") === "1" ? await listDismissed(uid, cursor) : await listRecommendations(uid, cursor && /^[a-f0-9]{64}$/.test(cursor) ? cursor : cursor ? "invalid" : null));
+    return jsonResponse(params.get("dismissed") === "1" ? await listDismissed(uid, cursor) : await listRecommendations(uid, cursor));
   } catch (error) { return errorResponse(error); }
 }
 export async function POST(request: Request) {

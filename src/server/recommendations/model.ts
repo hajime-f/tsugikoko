@@ -1,6 +1,7 @@
 // 推薦の計算。Firestoreに依存せず、単体テストから使える。
 import type { Genre } from "../../lib/places/genres";
 import type { RecommendationReason } from "../../lib/recommendations/schema";
+import { areaContains, type Area } from "../../lib/areas/schema";
 
 // 他ユーザーの記録が特定されないよう、3人以上が支持する店舗だけを候補にする。
 export const MIN_SUPPORTERS = 3;
@@ -9,11 +10,14 @@ export const MIN_SHARED_PLACES = 2;
 // 1ドキュメント（1MiB）に確実に収める上限。
 export const MAX_MODEL_BYTES = 900_000;
 const MAX_CACHED_ITEMS = 100;
+// 候補の地域コードを持たない旧モデルは作り直す。
+export const MODEL_VERSION = 2;
 
 export type Model = {
   generatedAt: number; truncated: boolean;
   // 推薦できる共通店舗（3人以上が支持し、安全な出典がある）。
-  candidates: { id: string; genre: Genre | null; supporters: number; url: string }[];
+  // 地域コードは共通店舗の住所から判定したもの。判定できない店舗はnull。
+  candidates: { id: string; genre: Genre | null; supporters: number; url: string; prefectureCode?: string | null; municipalityCode?: string | null }[];
   // 好みの近さの計算に使う店舗と、匿名化したユーザーごとの [店舗の番号, 重み] の並び。
   places: string[]; profiles: Record<string, number[]>;
 };
@@ -40,7 +44,7 @@ export const serializeModel = (model: Model) => JSON.stringify({ truncated: mode
 
 export type Ranked = { id: string; reason: RecommendationReason };
 // 保存が重なる他ユーザー（コサイン類似度）の支持を合計し、支持者が3人以上の店舗だけを好みの近い推薦にする。
-export function rank(model: Model, own: Own, self: string): Ranked[] {
+export function rank(model: Model, own: Own, self: string, area: Area | null = null): Ranked[] {
   const index = new Map(model.places.map((id, i) => [id, i]));
   const mine = new Map<number, number>();
   for (const [id, weight] of own.profile) if (index.has(id)) mine.set(index.get(id)!, weight);
@@ -61,7 +65,9 @@ export function rank(model: Model, own: Own, self: string): Ranked[] {
       }
     }
   }
-  const candidates = model.candidates.filter(candidate => !own.excluded.has(candidate.id) && !own.urls.has(candidate.url));
+  // 地域で先に絞ってから上限件数を適用する。住所から地域が分からない店舗は、地域を指定したときは除外する。
+  const candidates = model.candidates.filter(candidate => !own.excluded.has(candidate.id) && !own.urls.has(candidate.url) &&
+    areaContains(area, candidate.prefectureCode ? { prefectureCode: candidate.prefectureCode, municipalityCode: candidate.municipalityCode ?? null } : null));
   const used = new Set<string>(), ranked: Ranked[] = [];
   const personalized = candidates.filter(c => index.has(c.id) && (backers.get(index.get(c.id)!) ?? 0) >= MIN_SUPPORTERS)
     .sort((a, b) => scores.get(index.get(b.id)!)! - scores.get(index.get(a.id)!)! || b.supporters - a.supporters || a.id.localeCompare(b.id));

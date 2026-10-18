@@ -17,6 +17,8 @@ test("本人・他人・未ログインのいずれもFirestoreを直接読み�
       await assertFails(getDoc(doc(db, "recommendationModel/current")));
       await assertFails(getDoc(doc(db, "users/owner/recommendations/current")));
       await assertFails(setDoc(doc(db, "users/owner/recommendationDismissed/common"), { createdAt: 0 }));
+      await assertFails(getDoc(doc(db, "users/owner/preferences/area")));
+      await assertFails(setDoc(doc(db, "users/owner/preferences/area"), { prefectureCode: "13", municipalityCode: null }));
     }
   } finally { await env.cleanup(); }
 });

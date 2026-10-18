@@ -1,11 +1,11 @@
+import { createPlaceSchema } from "@/lib/places/schema";
+
 const pendingKey = "tsugikoko:pending-url";
 const userKey = (uid: string) => `tsugikoko:draft:${uid}`;
 
 export function validPlaceUrl(value: string) {
-  try {
-    const url = new URL(value.trim());
-    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.href : null;
-  } catch { return null; }
+  const result = createPlaceSchema.safeParse({ url: value });
+  return result.success ? result.data.url : null;
 }
 
 export function setPendingDraft(value: string) {

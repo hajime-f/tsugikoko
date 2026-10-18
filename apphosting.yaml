@@ -5,3 +5,24 @@ runConfig:
   concurrency: 80
   cpu: 1
   memoryMiB: 512
+env:
+  - variable: PLACE_AI_ENABLED
+    value: "true"
+    availability: [RUNTIME]
+  - variable: PLACE_AI_PROJECT
+    value: "tsugikoko"
+    availability: [RUNTIME]
+  # 店舗情報の取得ジョブ。無効・未設定の環境では応答後の処理（after）に戻る。
+  # キューと呼び出し用サービスアカウントを作成してから "true" にする。
+  - variable: PLACE_TASKS_ENABLED
+    value: "false"
+    availability: [RUNTIME]
+  - variable: PLACE_TASKS_QUEUE
+    value: "projects/tsugikoko/locations/asia-east1/queues/place-extraction"
+    availability: [RUNTIME]
+  - variable: PLACE_TASKS_INVOKER
+    value: "place-tasks-invoker@tsugikoko.iam.gserviceaccount.com"
+    availability: [RUNTIME]
+  - variable: PLACE_TASKS_URL
+    value: "https://tsugikoko--tsugikoko.asia-east1.hosted.app/api/internal/place-extraction"
+    availability: [RUNTIME]

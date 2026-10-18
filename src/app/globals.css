@@ -55,6 +55,7 @@ button { border: 0; }
 .hero { position: relative; overflow: hidden; background: var(--cream); min-height: 620px; }
 .hero-photo { position: absolute; inset: 0 0 0 48%; }
 .hero-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--cream), transparent 16%); pointer-events: none; }
+.top-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .hero-image { object-fit: cover; object-position: 53% 50%; }
 .photo-note { position: absolute; bottom: 38px; right: 38px; display: flex; gap: 10px; align-items: center; background: #fff; padding: 14px 19px; font-size: 13px; font-weight: 600; z-index: 1; box-shadow: 0 3px 20px #0000000a; }
 .photo-note-icon { display: flex; color: var(--green); }
@@ -495,4 +496,85 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
   .pending-draft h2 { font-size: 14px; }
   .pending-draft .draft-icon { display: none; }
   .pending-draft .icon-button { width: 32px; }
+}
+
+/* 店舗登録と非公開のマイリスト */
+.place-register { scroll-margin-top: 90px; background: white; border: 1px solid var(--line); border-radius: 20px; padding: 28px; margin: 0 0 36px; }
+.register-heading { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.register-icon { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border-radius: 15px; background: #eef3e8; color: var(--green); }
+.register-heading h2 { font-size: 22px; margin: 0 0 5px; }
+.register-heading p, .register-support { color: var(--muted); font-size: 13px; line-height: 1.8; }
+.register-form { display: flex; gap: 10px; }
+.register-form input { min-width: 0; flex: 1; border: 1px solid #cdd6c8; border-radius: 10px; padding: 15px; font-size: 16px; background: #fcfdfb; }
+.register-form .button { flex-shrink: 0; }
+.register-help { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #52734c; margin: 14px 0 4px; }
+.register-support { font-size: 12px; margin: 0; }
+.places-message { color: var(--green); font-size: 14px; margin: 12px 0 0; }
+.places-message:empty { display: none; }
+.places-error { margin-top: 14px; padding: 12px; border-radius: 10px; background: #fff3ed; color: #903c24; font-size: 13px; }
+.places-error .text-button { display: block; margin-top: 8px; }
+.places-loading { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); padding: 45px 0; font-size: 14px; }
+.my-places-section { background: #f5f4ee; padding: 0 24px 24px; border-radius: 26px; scroll-margin-top: 16px; }
+.places-toolbar { position: sticky; top: 0; z-index: 20; padding-top: 24px; background: #f5f4eef5; backdrop-filter: blur(12px); border-radius: 26px 26px 0 0; }
+.places-toolbar .member-section-heading { margin-bottom: 14px; }
+.places-toolbar-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.places-add { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--green); color: white; }
+.places-add:hover { background: #066344; }
+.places-toolbar .trash-toggle { min-height: 44px; margin: 0; border-bottom: 0; }
+.places-toolbar .place-tabs { border-color: #d7dccd; }
+.saved-place-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding-top: 22px; }
+.saved-place-card { --card-wash: #e4edd9; --card-shape: #cbdcba; --card-ink: #405e38; min-width: 0; display: flex; flex-direction: column; background: #fff; border: 1px solid #e6e5dc; border-radius: 18px; padding: 22px; box-shadow: 0 4px 16px #333b2510; scroll-margin-top: 155px; }
+.saved-place-card[data-tone="1"] { --card-wash: #f5e2d6; --card-shape: #e9c4af; --card-ink: #8a4a31; }
+.saved-place-card[data-tone="2"] { --card-wash: #f3eacb; --card-shape: #e7d59a; --card-ink: #776026; }
+.saved-place-card[data-tone="3"] { --card-wash: #dfece9; --card-shape: #bdd7d0; --card-ink: #365f56; }
+.saved-place-top { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; gap: 8px; min-height: 106px; margin: -22px -22px 20px; padding: 18px 22px; border-radius: 17px 17px 0 0; background: var(--card-wash); color: var(--card-ink); }
+.saved-place-top::before { content: ""; position: absolute; z-index: -1; width: 170px; height: 170px; border: 24px solid var(--card-shape); border-radius: 50%; right: -42px; top: -100px; }
+.saved-place-top::after { content: ""; position: absolute; z-index: -1; width: 105px; height: 105px; background: var(--card-shape); border-radius: 28px; left: 80px; bottom: -87px; transform: rotate(-25deg); }
+.place-art { display: grid; place-items: center; width: 62px; height: 62px; border-radius: 50%; color: var(--card-ink); background: #ffffffb3; border: 1px solid #ffffffb3; margin-right: auto; transform: rotate(-8deg); }
+.place-state { font-size: 11px; color: var(--card-ink); background: #ffffffd9; padding: 6px 9px; border-radius: 20px; }
+.saved-place-card h3 { font-size: 19px; line-height: 1.5; overflow-wrap: anywhere; margin: 0 0 10px; }
+.place-address, .place-status-copy { font-size: 13px; color: var(--muted); line-height: 1.8; overflow-wrap: anywhere; margin: 0 0 15px; }
+.place-note { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.8; background: #fafbf7; border-radius: 8px; padding: 12px; margin: 0 0 15px; }
+.place-sources { margin-top: auto; }
+.place-source { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--green); font-size: 13px; min-height: 44px; padding-block: 5px; }
+.place-source span { min-width: 0; }
+.place-source small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; color: var(--muted); font-size: 10px; margin-top: 4px; }
+.place-source svg { flex-shrink: 0; }
+.place-date { font-size: 10px; color: var(--muted); margin: 10px 0; }
+.place-actions { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 6px; border-top: 1px solid var(--line); }
+.place-actions button { display: flex; align-items: center; gap: 5px; min-height: 44px; color: #566451; background: transparent; font-size: 12px; }
+.places-more { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 24px auto; min-height: 48px; }
+.places-more .places-loading { padding: 12px 0; margin: 0; }
+.places-more .places-error { margin: 0; }
+.place-edit-form { display: grid; gap: 16px; margin-top: 24px; }
+.place-edit-form label { display: grid; gap: 7px; font-size: 13px; font-weight: 600; }
+.place-edit-form input, .place-edit-form textarea { border: 1px solid #cdd6c8; border-radius: 8px; padding: 12px; font: inherit; font-size: 16px; width: 100%; }
+.place-edit-form textarea { resize: vertical; }
+.trash-description, .trash-place-name { font-size: 14px; line-height: 1.8; margin: 18px 0; }
+.trash-confirm-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+@media (max-width: 1000px) { .saved-place-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .place-register { padding: 22px 18px; margin-bottom: 26px; border-radius: 16px; }
+  .register-heading { align-items: flex-start; gap: 10px; }
+  .register-icon { width: 38px; height: 38px; border-radius: 12px; }
+  .register-heading h2 { font-size: 18px; line-height: 1.6; }
+  .register-heading p { font-size: 12px; }
+  .register-form { flex-direction: column; }
+  .register-form .button { width: 100%; min-height: 50px; }
+  .register-help { font-size: 11px; }
+  .register-support { font-size: 11px; }
+  .saved-place-grid { grid-template-columns: 1fr; gap: 14px; padding-top: 18px; }
+  .saved-place-card { padding: 20px; }
+  .my-places-section { padding: 0 12px 16px; margin-inline: -6px; border-radius: 22px; }
+  .places-toolbar { padding: 16px 4px 0; border-radius: 22px 22px 0 0; }
+  .places-toolbar .member-section-heading { display: flex; gap: 8px; margin-bottom: 8px; }
+  .places-toolbar .member-section-heading h2 { font-size: clamp(16px, 4.7vw, 20px); }
+  .places-toolbar .eyebrow { font-size: 8px; letter-spacing: 1.5px; }
+  .places-toolbar-actions { gap: 4px; }
+  .places-toolbar .trash-toggle { width: 44px; justify-content: center; }
+  .places-toolbar .trash-toggle span { display: none; }
+  .places-toolbar .place-tabs button { min-height: 46px; padding-block: 8px 10px; }
+  .saved-place-top { min-height: 94px; margin: -20px -20px 18px; padding: 16px 20px; }
+  .place-art { width: 56px; height: 56px; }
+  .trash-toggle { margin-top: 12px; font-size: 12px; }
 }

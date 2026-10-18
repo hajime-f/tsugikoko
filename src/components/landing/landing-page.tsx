@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { HeroImage } from "@/components/ui/hero-image";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowDown,
@@ -9,7 +9,6 @@ import {
   Check,
   Coffee,
   Compass,
-  ExternalLink,
   Link2,
   LockKeyhole,
   MapPin,
@@ -23,6 +22,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AuthPanel } from "@/components/auth/auth-panel";
+import { validPlaceUrl } from "@/lib/auth/draft";
 
 type Modal = "login" | "signup" | "privacy" | "credits" | null;
 
@@ -31,7 +31,8 @@ const scenes = [
     label: "CAFE",
     title: "ひと息つきたい、あのカフェ。",
     description: "タイムラインで見つけた一杯を、次の休日に。",
-    image: "/images/landing/coffee.webp",
+    image: "/images/landing/coffee-provided.webp",
+    width: 800, height: 532,
     alt: "木のテーブルに置かれた白いカップのコーヒー",
     tag: "カフェ・コーヒー",
     icon: Coffee,
@@ -40,8 +41,9 @@ const scenes = [
     label: "LUNCH",
     title: "いつもの街で、新しい一皿。",
     description: "通りすがりの気になるお店も、忘れずに。",
-    image: "/images/landing/salad.webp",
-    alt: "色とりどりの野菜とクルトンを盛り付けたサラダ",
+    image: "/images/landing/salad-provided.webp",
+    width: 800, height: 533,
+    alt: "レタスやトマト、にんじんを盛り付けたサラダ",
     tag: "ランチ・ごはん",
     icon: Utensils,
   },
@@ -49,9 +51,10 @@ const scenes = [
     label: "WEEKEND",
     title: "誰かを誘いたくなる、週末。",
     description: "「今度ここ行こう」が、楽しみな予定になる。",
-    image: "/images/landing/brunch.webp",
-    alt: "パンケーキやトーストが並ぶブランチのテーブル",
-    tag: "ブランチ・お出かけ",
+    image: "/images/landing/weekend-provided.webp",
+    width: 640, height: 480,
+    alt: "ハンバーガーとポテトを囲む食事のテーブル",
+    tag: "食事・お出かけ",
     icon: Compass,
   },
 ];
@@ -71,7 +74,7 @@ const faqs = [
   },
   {
     question: "今すぐ使えますか？",
-    answer: "Googleアカウントで登録・ログインできます。店舗の登録・情報取得・おすすめ機能は準備中です。入力したURLはログイン後にこのタブの下書きとして引き継ぎますが、店舗としては保存されません。",
+    answer: "Googleアカウントで登録・ログインし、お店を非公開のマイリストに保存できます。ログイン前にURLを入力して「保存してはじめる」を押すと、ログイン完了後に自動で保存します。おすすめ機能は準備中です。",
   },
 ];
 
@@ -110,10 +113,10 @@ export function LandingPage() {
       return;
     }
     try {
-      const parsed = new URL(value);
-      if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error();
+      const parsed = validPlaceUrl(value);
+      if (!parsed) throw new Error();
       setError("");
-      setDraftUrl(parsed.href);
+      setDraftUrl(parsed);
       setModal("signup");
     } catch {
       setError("https:// または http:// で始まるURLを入力してください。");
@@ -141,7 +144,7 @@ export function LandingPage() {
       <main id="main">
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero-photo">
-            <Image src="/images/landing/brunch.webp" alt="コーヒーやパンケーキ、トーストを囲むブランチのテーブル" fill preload sizes="(max-width: 700px) 100vw, 58vw" className="hero-image" />
+            <HeroImage className="hero-image" />
             <div className="photo-note"><span className="photo-note-icon"><Bookmark size={18} aria-hidden="true" /></span><span>次の楽しみを、ひとつ。</span></div>
           </div>
           <div className="hero-inner">
@@ -180,7 +183,10 @@ export function LandingPage() {
             {scenes.map((scene) => (
               <article className="scene" key={scene.label}>
                 <div className="scene-photo">
-                  <Image src={scene.image} alt={scene.alt} fill sizes="(max-width: 700px) 85vw, 33vw" />
+                  <picture>
+                    <source type="image/avif" srcSet={scene.image.replace(/\.webp$/, ".avif")} />
+                    <img src={scene.image} alt={scene.alt} width={scene.width} height={scene.height} className="top-photo" loading="lazy" decoding="async" />
+                  </picture>
                   <span className="scene-tag"><scene.icon size={14} aria-hidden="true" />{scene.tag}</span>
                   <button className="scene-bookmark" aria-label={`${scene.tag}の行きたいリストをつくる`} onClick={() => openAuth("signup")}><Bookmark size={19} aria-hidden="true" /></button>
                 </div>
@@ -208,7 +214,7 @@ export function LandingPage() {
               <div className="demo-window">
                 <div className="demo-toolbar"><span className="mini-brand">ツギココ<span>.</span></span><span className="demo-badge">DEMO</span></div>
                 <div className="demo-url"><Link2 size={17} aria-hidden="true" /><span>気になるカフェのURL</span><Check size={17} aria-hidden="true" /></div>
-                <div className="demo-card-photo"><Image src="/images/landing/coffee.webp" alt="保存画面のイメージに使うコーヒーの写真" fill sizes="(max-width: 700px) 80vw, 350px" /></div>
+                <div className="demo-card-photo"><picture><source type="image/avif" srcSet="/images/landing/coffee-provided.avif" /><img src="/images/landing/coffee-provided.webp" alt="保存画面のイメージに使うコーヒーの写真" width={800} height={532} className="top-photo" loading="lazy" decoding="async" /></picture></div>
                 <div className="demo-card-body">
                   <p className="demo-category"><Coffee size={13} aria-hidden="true" />カフェ・コーヒー</p>
                   <h3>週末に行きたい、あのカフェ</h3>
@@ -264,12 +270,14 @@ export function LandingPage() {
           {modal === "privacy" && <>
             <DialogTitle className="dialog-title">プライバシーについて</DialogTitle>
             <DialogDescription className="dialog-description">あなたの「行きたい」を、大切に扱います。</DialogDescription>
-            <div className="dialog-prose"><p>個人の記録は、原則として非公開です。レビューやリストは、自分で選んだものだけ公開する設計です。</p><p>非公開の保存・評価もおすすめの計算に利用しますが、個人の非公開情報をほかの人に表示しません。</p><p>ログイン時に、認証に必要な名前・メールアドレス等をFirebase Authenticationに保存します。入力URLはこのタブ内の下書きとして扱い、サーバーには保存しません。保存デモは画面内のみで動作し、位置情報も取得しません。</p></div>
+            <div className="dialog-prose"><p>個人の記録は、原則として非公開です。レビューやリストは、自分で選んだものだけ公開する設計です。</p><p>非公開の保存・評価もおすすめの計算に利用しますが、個人の非公開情報をほかの人に表示しません。</p><p>ログイン時に、認証に必要な名前・メールアドレス等をFirebase Authenticationに保存します。「保存してはじめる」で入力したURLはログイン完了後にサーバーへ保存し、本人だけが見られるマイリストに追加します。保存デモは画面内のみで動作し、位置情報も取得しません。</p></div>
           </>}
           {modal === "credits" && <>
             <DialogTitle className="dialog-title">写真のクレジット</DialogTitle>
+            <p className="auth-footnote">トップ画像: ご提供のShutterstock画像（646209796）</p>
             <DialogDescription className="dialog-description">写真はサイトの利用イメージです。掲載店舗や実際のおすすめを示すものではありません。</DialogDescription>
-            <ul className="credit-list"><li><a href="https://unsplash.com/photos/a-table-topped-with-lots-of-plates-of-food-4h9Ffh6aawI" target="_blank" rel="noreferrer">ブランチ / Caramel<ExternalLink size={15} /></a></li><li><a href="https://unsplash.com/photos/a-cup-of-coffee-on-a-saucer-heKg-V9yHwc" target="_blank" rel="noreferrer">コーヒー / shche_ team<ExternalLink size={15} /></a></li><li><a href="https://unsplash.com/photos/vegetable-salad-pCxJvSeSB5A" target="_blank" rel="noreferrer">サラダ / Monika Grabkowska<ExternalLink size={15} /></a></li></ul><p className="auth-footnote"><a href="https://unsplash.com/license" target="_blank" rel="noreferrer">Unsplash License</a>に基づいて使用しています。</p>
+            <p className="auth-footnote">「次の『ここ』がある毎日。」のコーヒー・サラダ・食事の写真は、ご提供画像を使用しています。</p>
+            <p className="auth-footnote">保存デモのコーヒーも、同じご提供画像を使用しています。</p>
           </>}
         </DialogContent>
       </Dialog>

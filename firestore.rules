@@ -1,0 +1,8 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 個人データはIDトークンを検証したサーバーAPI経由だけで扱う。
+    // 共通店舗・URL対応表・レート制限もクライアントへ直接公開しない。
+    match /{document=**} { allow read, write: if false; }
+  }
+}

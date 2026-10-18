@@ -24,6 +24,6 @@ export function AuthPanel({ mode = "login", draftUrl = "" }: { mode?: "login" | 
     {auth.error && <p className="auth-error" role="alert">{auth.error}</p>}
     <p className="auth-guidance">初めての方は、選んだ方法でアカウントを作成します。登録済みの方は、以前と同じ方法を選んでください。</p>
     <p className="auth-guidance"><LockKeyhole size={14} aria-hidden="true" />別のログイン方法は、ログイン後の「アカウント」から追加できます。</p>
-    <p className="auth-footnote">認証に必要な名前・メールアドレス等をFirebaseに保存します。店舗の登録・おすすめは準備中です。{draftUrl && "このURLは、このタブの下書きとして引き継ぎます。"}</p>
+    <p className="auth-footnote">認証に必要な名前・メールアドレス等をFirebaseに保存します。{draftUrl && "ログインが完了すると、このURLを非公開のマイリストに自動で保存します。"}</p>
   </>;
 }

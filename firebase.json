@@ -10,8 +10,10 @@
       }
     }
   },
+  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
   "emulators": {
     "auth": { "host": "127.0.0.1", "port": 9099 },
+    "firestore": { "host": "127.0.0.1", "port": 8080 },
     "ui": { "enabled": false },
     "singleProjectMode": true
   },
@@ -33,6 +35,8 @@
         ".codex",
         "firebase-debug.log",
         "firebase-debug.*.log",
+        "firestore-debug.log",
+        "assets/originals",
         "test-results",
         "playwright-report",
         "*.tsbuildinfo"

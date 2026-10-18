@@ -33,7 +33,7 @@ test("URLを検証し、入力を保持したままログイン案内を開く",
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("https://example.com/cafe");
-  await expect(dialog).toContainText("このURLは、このタブの下書きとして引き継ぎます");
+  await expect(dialog).toContainText("ログインが完了すると、このURLを非公開のマイリストに自動で保存します");
   await expect(dialog.getByRole("button", { name: /Googleではじめる/ })).toBeEnabled();
   for (const provider of ["X", "Facebook", "Apple"]) {
     await expect(dialog.getByRole("button", { name: new RegExp(`${provider}ではじめる`) })).toBeDisabled();
@@ -68,6 +68,6 @@ test("ナビゲーション・ログイン案内・写真クレジットが動�
   await expect(page.getByRole("dialog")).toContainText("おかえりなさい。");
   await page.getByRole("button", { name: "閉じる", exact: true }).click();
   await page.getByRole("button", { name: "写真のクレジット" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Unsplash License");
-  await expect(page.getByRole("dialog").getByRole("link")).toHaveCount(4);
+  await expect(page.getByRole("dialog")).toContainText("保存デモのコーヒーも、同じご提供画像を使用しています");
+  await expect(page.getByRole("dialog")).toContainText("コーヒー・サラダ・食事の写真は、ご提供画像を使用しています");
 });

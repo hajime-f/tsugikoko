@@ -233,7 +233,7 @@ test("本人が選んだジャンルと未設定は、自動判定・店名か�
 test("追加したジャンルを保存・読み出しでき、JSON-LDの料理分類からも細かい分類で判定する", async () => {
   const uid = `genre-new-${randomUUID()}`;
   const { place } = await createPlace(uid, "https://tabelog.com/tokyo/A1303/A130302/13000099/");
-  for (const genre of ["gyoza", "beer_garden", "soup_curry", "donburi", "kissaten", "indian_curry", "hamburger", "takoyaki", "onigiri", "bento_deli", "udon", "bar", "pizza", "churrasco"] as const) {
+  for (const genre of ["gyoza", "beer_garden", "soup_curry", "donburi", "indian_curry", "hamburger", "takoyaki", "onigiri", "bento_deli", "udon", "bar", "pizza", "churrasco"] as const) {
     assert.equal((await updatePlace(uid, place.id, { name: "店", address: "", note: "", genre })).genre, genre);
     assert.equal((await listPlaces(uid, false, null)).places[0].genre, genre);
   }
@@ -250,20 +250,20 @@ test("追加したジャンルを保存・読み出しでき、JSON-LDの料理�
 
 test("マイリストを店名・住所・メモで検索し、ジャンル・状態で絞り込み、店名順でも安定してページングする", async () => {
   const uid = `search-${randomUUID()}`, other = `search-other-${randomUUID()}`;
-  const add = async (n: number, fields: { name: string; address?: string; note?: string; genre?: "sushi" | "cafe" | "kissaten" | null }) => {
+  const add = async (n: number, fields: { name: string; address?: string; note?: string; genre?: "sushi" | "cafe" | null }) => {
     const { place } = await createPlace(uid, `https://www.instagram.com/p/search${n}/`);
     await updatePlace(uid, place.id, { name: fields.name, address: fields.address ?? "", note: fields.note ?? "", ...(fields.genre !== undefined ? { genre: fields.genre } : {}) });
     return place.id;
   };
   const sushi = await add(1, { name: "鮨 こはる", address: "東京都渋谷区恵比寿1-2-3", note: "誕生日に行きたい", genre: "sushi" });
   const cafe = await add(2, { name: "ＣＯＦＦＥＥ Stand", address: "東京都目黒区中目黒1-1-1", note: "テラス席", genre: "cafe" });
-  const kissa = await add(3, { name: "純喫茶 あおば", address: "東京都渋谷区道玄坂2-2-2", note: "", genre: "kissaten" });
+  const kissa = await add(3, { name: "純喫茶 あおば", address: "東京都渋谷区道玄坂2-2-2", note: "", genre: "cafe" });
   const unnamed = (await createPlace(uid, "https://www.instagram.com/p/search4/")).place.id;
   const trashed = await add(5, { name: "恵比寿の閉店した店", genre: null });
   await updatePlace(uid, trashed, { action: "trash" });
   await createPlace(other, "https://www.instagram.com/p/search-other/").then(({ place }) => updatePlace(other, place.id, { name: "恵比寿 他人の店", address: "", note: "" }));
   await updateVisit(uid, kissa, { action: "addVisit", visitId: randomUUID(), visitedOn: "2024-03-01", rating: 4, comment: "" });
-  const ids = async (status: "all" | "saved" | "visited", filters: { q?: string; genre?: "all" | "unset" | "sushi" | "cafe" | "kissaten"; sort?: "newest" | "name" }) =>
+  const ids = async (status: "all" | "saved" | "visited", filters: { q?: string; genre?: "all" | "unset" | "sushi" | "cafe"; sort?: "newest" | "name" }) =>
     (await listPlaces(uid, false, null, status, { q: "", genre: "all", sort: "newest", ...filters })).places.map((place) => place.id);
 
   // 空白区切りはAND、各語は店名・住所・メモのどれかに含まれれば一致。全角・大文字も正規化する。
@@ -274,7 +274,7 @@ test("マイリストを店名・住所・メモで検索し、ジャンル・�
   assert.deepEqual(await ids("all", { q: "ｓｔａｎｄ" }), [cafe]);
   // ジャンルの未設定は一覧で返すgenreと一致させ、状態と組み合わせる。
   assert.deepEqual(await ids("all", { genre: "unset" }), [unnamed]);
-  assert.deepEqual(await ids("all", { genre: "kissaten" }), [kissa]);
+  assert.deepEqual(await ids("all", { genre: "cafe" }), [kissa, cafe]);
   assert.deepEqual(await ids("visited", { q: "渋谷区" }), [kissa]);
   assert.deepEqual(await ids("saved", { q: "渋谷区" }), [sushi]);
   // 店名順は日本語の照合順で、未入力は末尾。
@@ -306,4 +306,21 @@ test("マイリストを店名・住所・メモで検索し、ジャンル・�
     assert.deepEqual([...seen].sort(), [...created].sort(), sort);
   }
   await assert.rejects(listPlaces(bulk, false, "broken", "all", { q: "共通", genre: "all", sort: "name" }), /一覧の続き/);
+});
+
+test("統合前の喫茶店ジャンルが残る記録・取得キャッシュも、カフェ・喫茶店として読み取り・絞り込み・統合する", async () => {
+  const uid = `legacy-genre-${randomUUID()}`, url = "https://legacy-kissa.example.com/shop";
+  const { place } = await createPlace(uid, "https://www.instagram.com/p/legacy-kissa/");
+  // 本人が旧IDを選んだ記録を、一括書き換えせずにそのまま残す。
+  await database().doc(`users/${uid}/savedPlaces/${place.id}`).update({ name: "純喫茶 むかし", genre: "kissaten", editedFields: ["genre"] });
+  assert.equal((await listPlaces(uid, false, null)).places[0].genre, "cafe");
+  assert.deepEqual((await listPlaces(uid, false, null, "all", { q: "", genre: "cafe", sort: "newest" })).places.map(item => item.id), [place.id]);
+  // 旧IDの取得キャッシュも作り直さずに使え、統合後のIDで保存する。
+  const source = extractionTarget(url)!;
+  await database().doc(`placeSources/${sourceHash(url)}`).set({ name: "喫茶 キャッシュ", address: "東京都渋谷区恵比寿1-2-3", genre: "kissaten", fetchedAt: Date.now(), provenance: { ...source, method: "json-ld-v1" } });
+  const cached = (await createPlace(uid, url)).place;
+  await processExtraction(uid, cached.id, { fetcher: mockPages({}) });
+  const record = await database().doc(`users/${uid}/savedPlaces/${cached.id}`).get();
+  assert.equal(record.get("name"), "喫茶 キャッシュ");
+  assert.equal(record.get("genre"), "cafe");
 });

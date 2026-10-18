@@ -27,11 +27,26 @@ export function HomePage() {
   const [unlinkId, setUnlinkId] = useState<ProviderId | null>(null);
   const [pendingDraft, setPendingDraft] = useState<{ uid: string; url: string } | null>(null);
   const [accountNotice, setAccountNotice] = useState("");
+  const [greeting, setGreeting] = useState("");
   const loggingOut = useRef(false);
   const [placesRevision, setPlacesRevision] = useState(0);
   const [recommendationsRevision, setRecommendationsRevision] = useState(0);
   const onPlacesChanged = useCallback(() => setRecommendationsRevision(value => value + 1), []);
   const onRecommendationSaved = useCallback(() => setPlacesRevision(value => value + 1), []);
+
+  useEffect(() => {
+    const updateGreeting = () => {
+      const hour = new Date().getHours();
+      setGreeting(hour >= 5 && hour < 11 ? "おはようございます" : hour >= 11 && hour < 18 ? "こんにちは" : "こんばんは");
+    };
+    updateGreeting();
+    const timer = window.setInterval(updateGreeting, 60_000);
+    document.addEventListener("visibilitychange", updateGreeting);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", updateGreeting);
+    };
+  }, []);
 
   useEffect(() => {
     if (!auth.loading && !auth.user) router.replace(loggingOut.current ? "/" : "/login");
@@ -61,7 +76,7 @@ export function HomePage() {
       </div>
     </header>
     <main className="member-main" id="member-main">
-      <div className="home-greeting"><p><span className="status-dot" />こんにちは、{name}さん。</p><span className="private-badge"><LockKeyhole size={13} />あなた専用のホーム</span></div>
+      <div className="home-greeting"><p><span className="status-dot" />{greeting && `${greeting}、`}{name}さん。</p><span className="private-badge"><LockKeyhole size={13} />あなた専用のホーム</span></div>
       <section className="member-hero" aria-labelledby="member-title">
         <div className="member-hero-copy"><p className="eyebrow section-eyebrow">MAKE ROOM FOR GOOD DAYS.</p><h1 id="member-title">次の「ここ」が、<br />楽しみになる。</h1><p>気になる一軒から、いつものお気に入りまで。<br />あなたの「行きたい」を、ここから。</p><a className="button button-dark" href="#add-place">お店を登録する<Plus size={18} /></a></div>
         <div className="member-hero-photo"><HeroImage /><span className="member-photo-note"><Coffee size={16} />次の週末、どこに行こう。</span></div>

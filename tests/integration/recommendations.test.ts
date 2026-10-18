@@ -171,3 +171,19 @@ test("地域コードのない旧モデルは使わず作り直しを待ち、�
     await setArea(uid("me"), null);
   }
 });
+
+test("統合前の喫茶店ジャンルで集計したモデル・共通店舗も、カフェ・喫茶店として推薦する", async () => {
+  const current = database().doc("recommendationModel/current"), lock = database().doc("recommendationModel/lock");
+  const saved = await current.get();
+  const legacy = createHash("sha256").update(`${run}:legacy-kissa`).digest("hex");
+  try {
+    await database().doc(`places/${legacy}`).set({ name: "純喫茶 共通", address: "東京都渋谷区道玄坂2-2-2", genre: "kissaten", provenance: { url: `https://${run}-legacy.example.com/`, method: "json-ld-v1", version: "json-ld-v2", fetchedAt: Date.now() } });
+    await current.set({ generatedAt: Date.now(), version: 2, data: JSON.stringify({ truncated: false, places: [], profiles: {}, candidates: [{ id: legacy, genre: "kissaten", supporters: 3, url: `https://${run}-legacy.example.com/`, prefectureCode: "13", municipalityCode: "13113" }] }) });
+    await database().doc(`users/${uid("cafe-lover")}/savedPlaces/one`).set({ placeId: null, url: "https://www.instagram.com/p/cafe-lover/", deleted: false, genre: "kissaten", createdAt: Date.now() });
+    const result = await listRecommendations(uid("cafe-lover"), null);
+    assert.deepEqual(result.items.map(item => [item.id, item.genre, item.reason]), [[legacy, "cafe", "preferred_genre"]]);
+  } finally {
+    await lock.delete();
+    if (saved.exists) await current.set(saved.data()!); else await current.delete();
+  }
+});

@@ -48,6 +48,12 @@ test("おすすめを追加表示し、保存・興味なし・設定での解�
   await section.getByRole("button", { name: "もう一度読み込む" }).click();
   await expect(section.getByRole("article")).toHaveCount(12);
   const first = section.getByRole("article", { name: "おすすめ：おすすめ寿司 1", exact: true });
+  const mapLink = first.getByRole("link", { name: /Google マップで開く/ });
+  await expect(mapLink).toHaveAttribute("target", "_blank");
+  const mapUrl = new URL((await mapLink.getAttribute("href"))!);
+  expect(mapUrl.origin + mapUrl.pathname).toBe("https://www.google.com/maps/search/");
+  expect(mapUrl.searchParams.get("api")).toBe("1");
+  expect(mapUrl.searchParams.get("query")).toBe("おすすめ寿司 1 東京都渋谷区テスト1-2-3");
   await first.getByRole("button", { name: "行きたいに保存" }).click();
   await expect(section.getByRole("alert")).toContainText("保存に失敗しました");
   await expect(first).toBeAttached();

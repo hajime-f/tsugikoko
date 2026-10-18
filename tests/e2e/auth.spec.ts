@@ -30,7 +30,7 @@ test("ログイン後にURLを自動保存し、再読込・別タブ・再登�
   await expect(page.getByLabel("登録するお店や投稿のURL")).toHaveValue("");
   expect(saves).toBe(1);
   expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith("tsugikoko:draft:")))).toEqual([]);
-  await expect(page.getByText("こんにちは、テストユーザーさん。")).toBeVisible();
+  await expect(page.getByText(/^(おはようございます|こんにちは|こんばんは)、テストユーザーさん。$/)).toBeVisible();
   const avatar = page.getByRole("button", { name: "アカウントを開く" }).getByRole("img", { name: "プロフィール写真" });
   await expect(avatar).toHaveAttribute("src", photoURL);
   await expect.poll(() => avatar.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0)).toBe(true);
@@ -47,7 +47,7 @@ test("ログイン後にURLを自動保存し、再読込・別タブ・再登�
   await page.reload();
   await expect(page.getByRole("article")).toHaveCount(1);
   expect(saves).toBe(1);
-  await expect(page.getByText("こんにちは、テストユーザーさん。")).toBeVisible();
+  await expect(page.getByText(/^(おはようございます|こんにちは|こんばんは)、テストユーザーさん。$/)).toBeVisible();
   await expect(page.getByText("https://example.com/cafe", { exact: true })).toBeVisible();
   const other = await context.newPage();
   await other.goto(`${baseURL}/`);
@@ -153,4 +153,18 @@ test("ログインをキャンセルしたURLは保存せず、ログイン再�
   await providerLogin(page, "Googleではじめる", `auto-cancel-${testInfo.project.name}-${Date.now()}@example.test`);
   await expect(page.getByRole("article")).toHaveCount(1);
   expect(saves).toBe(1);
+});
+
+
+test("挨拶は端末の朝・昼・夜と復帰時の時刻に合わせて変わる", async ({ page }, info) => {
+  await page.route("**/api/places?*", route => route.fulfill({ json: { places: [], nextCursor: null } }));
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `greeting-${info.project.name}-${Date.now()}@example.test`);
+  await expect(page.locator(".home-greeting")).toBeVisible();
+  for (const [hour, minute, greeting] of [[4, 59, "こんばんは"], [5, 0, "おはようございます"], [10, 59, "おはようございます"], [11, 0, "こんにちは"], [17, 59, "こんにちは"], [18, 0, "こんばんは"], [0, 0, "こんばんは"]] as const) {
+    const timestamp = await page.evaluate(({ hour, minute }) => { const now = new Date(); now.setHours(hour, minute, 0, 0); return now.getTime(); }, { hour, minute });
+    await page.clock.setFixedTime(timestamp);
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await expect(page.locator(".home-greeting p")).toHaveText(`${greeting}、テストユーザーさん。`);
+  }
 });

@@ -1,5 +1,7 @@
 "use client";
 
+import { MapAddressLink } from "@/components/ui/map-address-link";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bookmark, ExternalLink, LoaderCircle, LockKeyhole, MapPin, RotateCcw, Sparkles, X } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -122,7 +124,7 @@ export function RecommendationsSection({ revision, onSaved, onSettings }: { revi
       const genre = isGenre(item.genre) ? genres[item.genre] : null;
       return <article className="recommendation-card" key={item.id} aria-label={`おすすめ：${item.name}`}>
         <div className="recommendation-photo">{genre?.image ? <picture><source type="image/avif" srcSet={`${genre.image}.avif`} /><img src={`${genre.image}.webp`} alt={`${genre.label}のイメージ写真（実店舗の写真ではありません）`} width={720} height={288} loading="lazy" decoding="async" /></picture> : <Sparkles size={36} aria-hidden="true" />}{genre && <span>{genre.label}・イメージ</span>}</div>
-        <div className="recommendation-body"><p className="recommendation-reason"><Sparkles size={14} />{reasons[item.reason]}</p><h3>{item.name}</h3><p className="recommendation-address"><MapPin size={15} />{item.address}</p><a className="recommendation-source" href={item.url} target="_blank" rel="noopener noreferrer">お店の掲載ページを見る<ExternalLink size={15} /></a><div className="recommendation-actions"><button className="button button-dark" disabled={Boolean(busy) || loading} onClick={() => void act(item, "save")}>{busy === item.id ? <LoaderCircle size={17} className="spinning" /> : <Bookmark size={17} />}行きたいに保存</button><button className="text-button" disabled={Boolean(busy) || loading} onClick={() => void act(item, "dismiss")}><X size={15} />興味なし</button></div></div>
+        <div className="recommendation-body"><p className="recommendation-reason"><Sparkles size={14} />{reasons[item.reason]}</p><h3>{item.name}</h3><p className="recommendation-address"><MapAddressLink name={item.name} address={item.address} /></p><a className="recommendation-source" href={item.url} target="_blank" rel="noopener noreferrer">お店の掲載ページを見る<ExternalLink size={15} /></a><div className="recommendation-actions"><button className="button button-dark" disabled={Boolean(busy) || loading} onClick={() => void act(item, "save")}>{busy === item.id ? <LoaderCircle size={17} className="spinning" /> : <Bookmark size={17} />}行きたいに保存</button><button className="text-button" disabled={Boolean(busy) || loading} onClick={() => void act(item, "dismiss")}><X size={15} />興味なし</button></div></div>
       </article>;
     })}</div>
     {loading && <p className="places-loading" role="status"><LoaderCircle size={20} className="spinning" />おすすめを読み込んでいます...</p>}
@@ -155,7 +157,7 @@ export function RecommendationSettings({ onChanged }: { onChanged: () => void })
   return <div className="recommendation-settings"><AreaSettings onChanged={onChanged} /><p>非公開の保存・評価も推薦の計算に使います。個人のメモ・感想や、誰が保存・評価したかを、ほかの人に表示することはありません。</p><h3>「興味なし」にしたお店</h3><p>解除すると、条件に合うときに再びおすすめに表示されます。</p>
     {message && <p role="status">{message}</p>}
     {error && <p role="alert">{error}<button className="text-button" disabled={loading || busy} onClick={() => void load()}>再読み込み</button></p>}
-    <ul>{items.map(item => <li key={item.id}><span>{item.name || "店舗情報を表示できないお店"}<small>{item.address}</small></span><button className="text-button" disabled={busy || loading} aria-label={`${item.name || "店舗情報を表示できないお店"}の興味なしを解除`} onClick={async () => {
+    <ul>{items.map(item => <li key={item.id}><span>{item.name || "店舗情報を表示できないお店"}<small><MapAddressLink name={item.name} address={item.address} /></small></span><button className="text-button" disabled={busy || loading} aria-label={`${item.name || "店舗情報を表示できないお店"}の興味なしを解除`} onClick={async () => {
       if (locked.current) return;
       locked.current = true; setBusy(true); setError("");
       try { await api("", { action: "restore", id: item.id }); setItems(current => current.filter(existing => existing.id !== item.id)); setMessage(`${item.name || "お店"}の「興味なし」を解除しました。`); onChanged(); }

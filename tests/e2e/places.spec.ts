@@ -225,13 +225,22 @@ test("URL登録・重複防止・編集・再ログイン・ごみ箱を通し�
   await expect(page.getByRole("article")).toHaveCount(1);
   await card.getByRole("button", { name: "編集", exact: true }).click();
   await page.getByRole("dialog").getByLabel("店名", { exact: true }).fill("次の休日のお店");
+  await page.getByRole("dialog").getByLabel("住所", { exact: true }).fill("東京都渋谷区テスト1-2-3 A&Bビル");
   await page.getByRole("dialog").getByLabel("自分用メモ").fill("窓際の席が気になる");
   const genreSelect = page.getByRole("dialog").getByLabel("ジャンル", { exact: true });
   await expect(genreSelect).toHaveValue("");
+  await expect(genreSelect.locator('option[value="kissaten"]')).toHaveCount(0);
+  await expect(genreSelect.locator('option[value="cafe"]')).toHaveText("カフェ・喫茶店");
   await genreSelect.selectOption({ label: "寿司" });
   await page.getByRole("button", { name: "変更を保存", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const edited = page.getByRole("article", { name: "次の休日のお店" });
+  const mapLink = edited.getByRole("link", { name: /Google マップで開く/ });
+  await expect(mapLink).toHaveAttribute("target", "_blank");
+  const mapUrl = new URL((await mapLink.getAttribute("href"))!);
+  expect(mapUrl.origin + mapUrl.pathname).toBe("https://www.google.com/maps/search/");
+  expect(mapUrl.searchParams.get("api")).toBe("1");
+  expect(mapUrl.searchParams.get("query")).toBe("次の休日のお店 東京都渋谷区テスト1-2-3 A&Bビル");
   await expect(edited.getByRole("button", { name: "編集", exact: true })).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(edited.locator(".place-status-copy")).toHaveCount(0);
   await expect(edited.locator(".saved-place-top")).toHaveAttribute("data-genre", "sushi");
@@ -256,7 +265,7 @@ test("URL登録・重複防止・編集・再ログイン・ごみ箱を通し�
   expect((await unchangedRequest).postDataJSON()).not.toHaveProperty("genre");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   // 追加ジャンルとカフェの差し替え画像を、実APIの保存・絞り込み・再表示まで確認する。
-  for (const [id, label] of [["pizza", "ピザ"], ["churrasco", "シュラスコ"], ["cafe", "カフェ"]]) {
+  for (const [id, label] of [["pizza", "ピザ"], ["churrasco", "シュラスコ"], ["cafe", "カフェ・喫茶店"]]) {
     await edited.getByRole("button", { name: "編集", exact: true }).click();
     await genreSelect.selectOption({ label });
     await page.getByRole("button", { name: "変更を保存", exact: true }).click();
@@ -435,7 +444,7 @@ test("訪問APIは本人だけに履歴を返し、評価と日付・所有者�
 
 test("提供画像で追加したジャンルを選択・保存し、再読み込み後も画像を表示する", async ({ page }, info) => {
   const { genres } = await import("../../src/lib/places/genres");
-  const additions = ["gyoza", "beer_garden", "soup_curry", "donburi", "kissaten", "indian_curry", "hamburger", "takoyaki", "onigiri", "bento_deli", "udon", "bar"] as const;
+  const additions = ["gyoza", "beer_garden", "soup_curry", "donburi", "cafe", "indian_curry", "hamburger", "takoyaki", "onigiri", "bento_deli", "udon", "bar"] as const;
   await page.goto("/login");
   await providerLogin(page, "Googleでログイン", `genre-additions-${info.project.name}-${Date.now()}@example.test`);
   await page.getByLabel("登録するお店や投稿のURL").fill(unsupported);

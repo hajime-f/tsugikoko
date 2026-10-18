@@ -1,8 +1,8 @@
 import { load } from "cheerio";
 import { z } from "zod";
-import { genreFromText, isGenre } from "../../lib/places/genres";
+import { genreFromText, isGenre, normalizeGenre } from "../../lib/places/genres";
 
-export const factsSchema = z.object({ name: z.string().trim().min(1).max(120), address: z.string().trim().min(8).max(300), genre: z.custom<import("../../lib/places/genres").Genre>(isGenre).nullable().optional() }).strict();
+export const factsSchema = z.object({ name: z.string().trim().min(1).max(120), address: z.string().trim().min(8).max(300), genre: z.preprocess(value => normalizeGenre(value) ?? value, z.custom<import("../../lib/places/genres").Genre>(isGenre)).nullable().optional() }).strict();
 export type PlaceFacts = z.infer<typeof factsSchema>;
 export const compact = (text: string) => text.normalize("NFKC").replace(/\s+/g, "").toLowerCase();
 type Node = Record<string, unknown>;

@@ -7,7 +7,7 @@ import { ApiError } from "@/server/auth/request";
 import { MAX_VISITS, sortVisits, sourceLabel, type PlaceListQuery, type SavedPlace, type Visit, type VisitAction } from "@/lib/places/schema";
 import { extractionTarget, fetchPageFacts, type PageFetcher } from "@/server/extraction/sources";
 import { factsSchema } from "@/server/extraction/parser";
-import { genreFromText, isGenre, type Genre } from "@/lib/places/genres";
+import { genreFromText, normalizeGenre, type Genre } from "@/lib/places/genres";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const records = (uid: string) => database().collection("users").doc(uid).collection("savedPlaces");
@@ -21,8 +21,8 @@ const editedFieldsOf = (doc: FirebaseFirestore.DocumentSnapshot): string[] =>
   doc.get("editedFields") ?? (doc.get("customDetails") ? ["name", "address"] : []);
 // 統合先・統合元の順に本人が選んだジャンルを優先し、なければ統合先の判定済みジャンル、自動判定の順に使う。
 function mergedGenre(target: FirebaseFirestore.DocumentSnapshot, source: FirebaseFirestore.DocumentSnapshot, extracted: Genre | null | undefined): Genre | null {
-  for (const doc of [target, source]) if (editedFieldsOf(doc).includes("genre")) return isGenre(doc.get("genre")) ? doc.get("genre") : null;
-  return isGenre(target.get("genre")) ? target.get("genre") : extracted ?? null;
+  for (const doc of [target, source]) if (editedFieldsOf(doc).includes("genre")) return normalizeGenre(doc.get("genre"));
+  return normalizeGenre(target.get("genre")) ?? extracted ?? null;
 }
 function publicRecord(id: string, data: FirebaseFirestore.DocumentData): SavedPlace {
   return {
@@ -33,7 +33,7 @@ function publicRecord(id: string, data: FirebaseFirestore.DocumentData): SavedPl
     lastAttemptAt: data.lastAttemptAt, deleted: data.deleted, deleteAt: data.deleteAt, visibility: "private",
     visitCount: data.visitCount ?? 0, latestVisit: data.latestVisit ?? null,
     // 本人が選んだジャンル（未設定を含む）は店名からの推測で置き換えない。
-    genre: isGenre(data.genre) ? data.genre : (data.editedFields ?? []).includes("genre") ? null : genreFromText(data.name ?? ""),
+    genre: normalizeGenre(data.genre) ?? ((data.editedFields ?? []).includes("genre") ? null : genreFromText(data.name ?? "")),
   };
 }
 
@@ -340,7 +340,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
         name: edited.includes("name") ? current.get("name") : facts.name,
         address: edited.includes("address") ? current.get("address") : facts.address,
         placeId, extraction: "ready", reason: null, refresh: false, fetchedAt, updatedAt: Date.now(),
-        genre: edited.includes("genre") ? (isGenre(current.get("genre")) ? current.get("genre") : null) : facts.genre,
+        genre: edited.includes("genre") ? normalizeGenre(current.get("genre")) : facts.genre,
       });
       if (!otherActive) tx.set(keyRef, { id });
     });

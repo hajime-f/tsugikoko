@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { isGenre, type Genre } from "./genres";
+import { isGenre, normalizeGenre, type Genre } from "./genres";
+// 旧ジャンルID（kissatenなど）を送る古い画面からの入力も、統合後のIDに置き換えて受け付ける。
+const genreInput = (message: string) => z.preprocess(value => typeof value === "string" ? normalizeGenre(value) ?? value : value, z.custom<Genre>(isGenre, message));
 
 export function normalizePlaceUrl(value: string): string {
   const url = new URL(value.trim());
@@ -39,7 +41,7 @@ export const createPlaceSchema = z.object({ url: z.string().max(2048).transform(
 export const editPlaceSchema = z.object({
   name: z.string().trim().max(120), address: z.string().trim().max(300), note: z.string().trim().max(2000),
   // 省略時は現在のジャンルを維持し、nullは本人が明示的に未設定へ戻したことを表す。
-  genre: z.custom<Genre>(isGenre, "ジャンルを選び直してください。").nullable().optional(),
+  genre: genreInput("ジャンルを選び直してください。").nullable().optional(),
 }).strict();
 export const actionSchema = z.object({ action: z.enum(["retry", "trash", "restore"]) }).strict();
 
@@ -79,7 +81,7 @@ export type PlaceList = { places: SavedPlace[]; nextCursor: string | null };
 export const placeListQuerySchema = z.object({
   status: z.enum(["all", "saved", "visited"]).default("all"),
   q: z.string().trim().max(100, "検索語は100文字以内で入力してください。").default(""),
-  genre: z.union([z.enum(["all", "unset"]), z.custom<Genre>(isGenre, "ジャンルを選び直してください。")]).default("all"),
+  genre: z.union([z.enum(["all", "unset"]), genreInput("ジャンルを選び直してください。")]).default("all"),
   sort: z.enum(["newest", "name"]).default("newest"),
 });
 export type PlaceListQuery = z.infer<typeof placeListQuerySchema>;

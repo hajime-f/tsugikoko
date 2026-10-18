@@ -59,7 +59,7 @@ test("対応ジャンルの名称から画像を選び、曖昧な店名や焼�
   // 細かい分類を汎用の分類へ落とさない。
   for (const [text, genre] of [
     ["スープカレー こはる", "soup_curry"], ["インドカレー こはる", "indian_curry"], ["欧風カレー", "curry"],
-    ["純喫茶 こはる", "kissaten"], ["喫茶店", "kissaten"], ["カフェ こはる", "cafe"],
+    ["純喫茶 こはる", "cafe"], ["喫茶店", "cafe"], ["カフェ こはる", "cafe"],
     ["ワインバー", "wine_bar"], ["ショットバー こはる", "bar"], ["Bar Koharu", "bar"], ["ビアガーデン", "beer_garden"], ["肉バル", "meat_bar"],
     ["ハンバーガー", "hamburger"], ["Koharu Burger", "hamburger"], ["バーベキュー", null],
     ["バー こはる", "bar"], ["こはる バー", "bar"], ["カクテルバー", "bar"], ["ハンバーグ", null], ["バーミキュラ", null], ["スターバックス", null],
@@ -74,6 +74,14 @@ test("対応ジャンルの名称から画像を選び、曖昧な店名や焼�
   ] as const) assert.equal(genreFromText(text), genre, text);
   assert.equal(genreFromText("こはる"), null);
   assert.equal(isGenre("toString"), false);
+  // 統合した旧ID（喫茶店）は新しいIDとしては受け付けず、読み取り時に「カフェ・喫茶店」へ置き換える。
+  const { normalizeGenre } = await import("../../src/lib/places/genres");
+  assert.equal(isGenre("kissaten"), false);
+  assert.equal(genres.cafe.label, "カフェ・喫茶店");
+  assert.deepEqual([normalizeGenre("kissaten"), normalizeGenre("cafe"), normalizeGenre("unknown"), normalizeGenre(null), normalizeGenre("toString")], ["cafe", "cafe", null, null, null]);
+  const { editPlaceSchema, placeListQuerySchema } = await import("../../src/lib/places/schema");
+  assert.equal(editPlaceSchema.parse({ name: "", address: "", note: "", genre: "kissaten" }).genre, "cafe");
+  assert.equal(placeListQuerySchema.parse({ genre: "kissaten" }).genre, "cafe");
   assert.equal(isGenre("../../secret"), false);
 });
 

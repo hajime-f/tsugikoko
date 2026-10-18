@@ -10,7 +10,7 @@ export const genres = {
   ramen: { label: "ラーメン", image: "/images/genres/ramen-provided" },
   curry: { label: "カレー", image: "/images/genres/curry-provided" },
   soba: { label: "そば", image: "/images/genres/soba-provided" },
-  cafe: { label: "カフェ", image: "/images/genres/cafe-provided" },
+  cafe: { label: "カフェ・喫茶店", image: "/images/genres/cafe-provided" },
   bakery: { label: "ベーカリー", image: "/images/genres/bakery-provided" },
   unagi: { label: "うなぎ", image: "/images/genres/unagi-provided" },
   okonomiyaki: { label: "お好み焼き", image: "/images/genres/okonomiyaki-provided" },
@@ -45,7 +45,6 @@ export const genres = {
   beer_garden: { label: "ビアガーデン", image: "/images/genres/beer-garden-provided" },
   soup_curry: { label: "スープカレー", image: "/images/genres/soup-curry-provided" },
   donburi: { label: "丼もの", image: "/images/genres/donburi-provided" },
-  kissaten: { label: "喫茶店", image: "/images/genres/kissaten-provided" },
   indian_curry: { label: "インドカレー", image: "/images/genres/indian-curry-provided" },
   hamburger: { label: "ハンバーガー", image: "/images/genres/hamburger-provided" },
   takoyaki: { label: "たこ焼き", image: "/images/genres/takoyaki-provided" },
@@ -56,6 +55,12 @@ export const genres = {
 } as const;
 export type Genre = keyof typeof genres;
 export function isGenre(value: unknown): value is Genre { return typeof value === "string" && Object.hasOwn(genres, value); }
+// 統合した旧ジャンルID。保存済みの記録・共通店舗・キャッシュに残る値は読み取り時に置き換える。
+const legacyGenres: Record<string, Genre> = { kissaten: "cafe" };
+export function normalizeGenre(value: unknown): Genre | null {
+  if (isGenre(value)) return value;
+  return typeof value === "string" && Object.hasOwn(legacyGenres, value) ? legacyGenres[value] : null;
+}
 
 // 一休のトップ「料理ジャンルから探す」にある分類と、既存の保存値を扱う。
 // https://restaurant.ikyu.com/ / https://restaurant.ikyu.com/keyword/genre/
@@ -66,11 +71,11 @@ export const genreGroups = [
   { label: "中華", options: ["chinese", "dim_sum", "gyoza"] },
   { label: "焼肉・エスニック", options: ["yakiniku", "churrasco", "ethnic", "korean", "thai", "vietnamese", "indian_curry"] },
   { label: "居酒屋・バー", options: ["izakaya", "meat_bar", "wine_bar", "bar", "beer_garden"] },
-  { label: "カフェ・ブッフェ", options: ["cafe", "kissaten", "bakery", "afternoon_tea", "buffet", "sweets_buffet"] },
+  { label: "カフェ・ブッフェ", options: ["cafe", "bakery", "afternoon_tea", "buffet", "sweets_buffet"] },
 ] as const satisfies readonly { label: string; options: readonly Genre[] }[];
 
 // 料理分類や店名の明示的な語だけを対応付ける。曖昧な「飲食店」などは分類しない。
-// 先に一致したものを採用するため、細かい分類（スープカレー・喫茶店など）を汎用の分類より前に置く。
+// 先に一致したものを採用するため、細かい分類（スープカレー・インドカレーなど）を汎用の分類より前に置く。
 const patterns: [Genre, RegExp][] = [
   ["sushi", /寿司|鮨|すし|\bsushi\b/i],
   ["yakiniku", /焼肉|焼き肉|\byakiniku\b|korean barbecue/i],
@@ -122,8 +127,7 @@ const patterns: [Genre, RegExp][] = [
   // 「バー」が独立した語の場合だけ。ハンバーグ・バーベキュー等の一部としての「バー」は対象外。
   ["bar", /(?:^|[\s・/|｜()（）「」-])(?:ショット|カクテル|オーセンティック|ダイニング|ミュージック|ウ[イィ]スキー|スポーツ|ジャズ|ダーツ)?バー(?=$|[\s・/|｜()（）「」-])|\bbar\b/i],
   ["bakery", /ベーカリー|パン屋|パン専門|ブーランジェリー|\bbakery\b|\bboulangerie\b/i],
-  ["kissaten", /喫茶|\bkissaten\b/i],
-  ["cafe", /カフェ|珈琲|コーヒー|\bcaf[eé]\b|\bcoffee\b/i],
+  ["cafe", /カフェ|喫茶|珈琲|コーヒー|\bcaf[eé]\b|\bcoffee\b|\bkissaten\b/i],
   ["japanese", /日本料理|和食|\bjapanese\b/i],
 ];
 export function genreFromText(text: string): Genre | null {

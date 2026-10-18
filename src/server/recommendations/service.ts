@@ -4,7 +4,7 @@ import { FieldPath } from "firebase-admin/firestore";
 import { database } from "@/server/firebase/admin";
 import { ApiError } from "@/server/auth/request";
 import { extractionTarget } from "@/server/extraction/sources";
-import { isGenre, type Genre } from "@/lib/places/genres";
+import { normalizeGenre, type Genre } from "@/lib/places/genres";
 import type { DismissedRecommendation, Recommendation, RecommendationList, RecommendationMode } from "@/lib/recommendations/schema";
 import { fitModel, MIN_SHARED_PLACES, MIN_SUPPORTERS, MODEL_VERSION, rank, serializeModel, type Model, type Own, type Ranked } from "@/server/recommendations/model";
 import { areaContains, areaFromAddress, areaKey } from "@/lib/areas/schema";
@@ -75,7 +75,10 @@ export async function buildModel(now = Date.now()): Promise<Model> {
 const parseModel = (snapshot: FirebaseFirestore.DocumentSnapshot): Model | null => {
   const generatedAt = snapshot.get("generatedAt"), data = snapshot.get("data");
   if (typeof generatedAt !== "number" || typeof data !== "string" || snapshot.get("version") !== MODEL_VERSION) return null;
-  return { ...JSON.parse(data), generatedAt };
+  const model: Model = { ...JSON.parse(data), generatedAt };
+  // 統合前のジャンルIDで集計したモデルも、統合後のIDで比較する。
+  model.candidates = model.candidates.map(candidate => ({ ...candidate, genre: normalizeGenre(candidate.genre) }));
+  return model;
 };
 
 // 表示に使うのは共通店舗の検証済み情報と、自動入力の対象になる公開ページのURLだけ。除外サイト・SNSのURLは返さない。
@@ -87,7 +90,7 @@ function safePlace(doc: FirebaseFirestore.DocumentSnapshot): DismissedRecommenda
   if (doc.get("provenance.method") !== "json-ld-v1") return null;
   if (typeof name !== "string" || !name.trim() || typeof address !== "string" || !target) return null;
   const genre = doc.get("genre");
-  return { id: doc.id, name, address, genre: isGenre(genre) ? genre : null, url: target.url };
+  return { id: doc.id, name, address, genre: normalizeGenre(genre), url: target.url };
 }
 
 // 期限切れなら1つのリクエストだけが作り直し、ほかは古い集計を使う。
@@ -144,7 +147,8 @@ async function ownSignals(uid: string): Promise<Own> {
     if (!active(data)) continue;
     const signal = signalOf(data);
     if (typeof data.placeId === "string" && signal.positive) profile.set(data.placeId, signal.weight);
-    if (signal.positive && isGenre(data.genre)) genreCount.set(data.genre, (genreCount.get(data.genre) ?? 0) + 1);
+    const genre = normalizeGenre(data.genre);
+    if (signal.positive && genre) genreCount.set(genre, (genreCount.get(genre) ?? 0) + 1);
   }
   const genres = [...genreCount].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, TOP_GENRES).map(([genre]) => genre);
   return { excluded, urls, profile, genres };

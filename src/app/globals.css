@@ -657,7 +657,11 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .recommendation-reason svg { flex-shrink: 0; margin-top: 2px; }
 .recommendation-body h3 { font-size: 18px; line-height: 1.6; overflow-wrap: anywhere; }
 .recommendation-address { display: flex; gap: 5px; font-size: 12px; line-height: 1.8; color: var(--muted); margin: 12px 0; overflow-wrap: anywhere; }
-.recommendation-address svg { flex-shrink: 0; margin-top: 3px; }
+.map-address-link { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; max-width: 100%; color: var(--green); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.map-address-link svg { flex-shrink: 0; }
+.map-address-link span { overflow-wrap: anywhere; }
+.map-address-link:hover { text-decoration-thickness: 2px; }
+.map-address-link:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 3px; }
 .recommendation-source { display: flex; align-items: center; gap: 6px; min-height: 44px; font-size: 12px; color: var(--green); margin-top: auto; }
 .recommendation-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .recommendation-actions .button { font-size: 13px; min-height: 44px; padding: 12px 8px; }

@@ -208,6 +208,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
     });
   }
   if (!source) { await finishWithoutFacts("unsupported"); return "done"; }
+  let stage: "cache" | "fetch" | "save" = "cache";
   try {
     const cacheRef = database().doc(`placeSources/${hash(source.url)}`);
     const cache = (await cacheRef.get()).data();
@@ -215,6 +216,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
     // 本人の「再取得」は元ページを読み直す。連打や複数人の同時依頼は10分以内の結果で吸収する。
     const maxAge = options.forceRefresh ? 0 : leased.refresh ? REFRESH_CACHE_MS : CACHE_MS;
     const fresh = cache && cache.genre !== undefined && cache.provenance?.version === source.version && Date.now() - cache.fetchedAt >= 0 && Date.now() - cache.fetchedAt < maxAge && cachedFacts.success;
+    stage = "fetch";
     const result = fresh ? { facts: cachedFacts.data, method: cache.provenance.method } : await fetchPageFacts(place.url, text => extractWithAi(uid, text), fetch, source);
     if (!result.facts) {
       await finishWithoutFacts(result.reason);
@@ -224,6 +226,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
     const fetchedAt = fresh ? cache.fetchedAt : Date.now();
     const placeId = hash(`${facts.name.normalize("NFKC").toLowerCase().replace(/\s/g, "")}|${facts.address.normalize("NFKC").replace(/\s/g, "")}`);
     const provenance = fresh ? cache.provenance : { ...source, method: result.method, model: result.method === "gemini-text-v1" ? AI_MODEL : null, fetchedAt };
+    stage = "save";
     await database().runTransaction(async (tx) => {
       const current = await tx.get(ref), keyRef = placeKeys(uid).doc(placeId), key = await tx.get(keyRef);
       if (!current.exists || current.get("deleted") || current.get("extraction") !== "pending" || current.get("attemptId") !== attemptId) return;
@@ -267,8 +270,15 @@ export async function processExtraction(uid: string, id: string, options: { forc
       });
       if (!otherActive) tx.set(keyRef, { id });
     });
-  } catch {
+  } catch (error) {
     // 外部ページの失敗でも登録URL・個人メモは保持する。
+    // 原因の切り分け用。URL・メモ・本文は出さず、自前のエラー文だけを記録する。
+    const detail = error instanceof Error ? {
+      name: error.name, code: (error as { code?: unknown }).code ?? null,
+      cause: ((error.cause as { code?: unknown } | undefined)?.code) ?? null,
+      message: error.message.startsWith("Source ") ? error.message : null,
+    } : { name: typeof error };
+    console.error("place_extraction_failed", JSON.stringify({ stage, host: new URL(source.url).hostname, ...detail }));
     await finishWithoutFacts("fetch_failed", true);
   }
   return "done";

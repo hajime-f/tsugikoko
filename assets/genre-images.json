@@ -1,73 +1,477 @@
 {
-  "generator": "Built-in image_gen",
-  "purpose": "Generic cuisine imagery, not photos of the saved restaurants",
+  "purpose": "Cuisine category photographs, not photographs of the saved restaurants",
   "date": "2026-10-18",
+  "source": "User-provided photographs with retained Unsplash photographs",
+  "processing": "User-provided photos: 2.5:1 crop focused on food, up to 720px width without enlargement, AVIF quality 52 and WebP quality 74. Retained Unsplash photos: see per-asset crop and source information. No generative AI edits.",
   "assets": [
     {
       "id": "sushi",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: assorted Japanese nigiri sushi: salmon, tuna and white fish on a simple ceramic plate. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/sushi.{avif,webp}",
-      "original": "assets/originals/genres/sushi.png"
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/寿司.jpg",
+      "sourceSha256": "aa430fb40f89c62d48a6e2e480f4b4361cf2752c0b2b180b6e070f5c8f11b62a",
+      "sourceWidth": 760,
+      "sourceHeight": 507,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/sushi-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 102,
+        "width": 760,
+        "height": 304
+      },
+      "width": 720,
+      "height": 288,
+      "avifBytes": 14177,
+      "webpBytes": 15842
     },
     {
       "id": "yakiniku",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese yakiniku: several small pieces of beautifully browned grilled beef, on a small dark charcoal tabletop grill. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/yakiniku.{avif,webp}",
-      "original": "assets/originals/genres/yakiniku.png"
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/焼肉.jpg",
+      "sourceSha256": "1b2558ab46d3273424b48570ed60610473fd7de00dbb03b76f6a5fdd057f2f27",
+      "sourceWidth": 2048,
+      "sourceHeight": 1365,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/yakiniku-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 273,
+        "width": 2048,
+        "height": 819
+      },
+      "width": 720,
+      "height": 288,
+      "avifBytes": 13846,
+      "webpBytes": 17916
     },
     {
       "id": "yakitori",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese yakitori: three skewers of grilled chicken thigh and scallions with a light tare glaze on an earthenware plate. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/yakitori.{avif,webp}",
-      "original": "assets/originals/genres/yakitori.png"
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/焼き鳥.jpg",
+      "sourceSha256": "5cb2ecc44951982225bccc6a3870fb6fc9082f2181152f8941328f1da0da52cf",
+      "sourceWidth": 540,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/yakitori-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 72,
+        "width": 540,
+        "height": 216
+      },
+      "width": 540,
+      "height": 216,
+      "avifBytes": 14640,
+      "webpBytes": 20498
     },
     {
       "id": "chinese",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Chinese cuisine: a bamboo steamer of plump steamed dumplings with one small plate of golden gyoza. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/chinese.{avif,webp}",
-      "original": "assets/originals/genres/chinese.png"
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/中華.jpg",
+      "sourceSha256": "0aba7d513eeb7690b837d6406b2b9db0aed485c3acfb8bb3ac7f153c49c4d71e",
+      "sourceWidth": 540,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/chinese-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 72,
+        "width": 540,
+        "height": 216
+      },
+      "width": 540,
+      "height": 216,
+      "avifBytes": 12537,
+      "webpBytes": 18542
     },
     {
       "id": "italian",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Italian cuisine: a plate of spaghetti with fresh tomato sauce, basil and parmesan. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/italian.{avif,webp}",
-      "original": "assets/originals/genres/italian.png"
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/イタリアン.jpg",
+      "sourceSha256": "7b9ccb68ea16c33b53a585c39fb02e9609113c890ea792d2af59f5fcefd3a40f",
+      "sourceWidth": 539,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/italian-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 72,
+        "width": 539,
+        "height": 216
+      },
+      "width": 539,
+      "height": 216,
+      "avifBytes": 19924,
+      "webpBytes": 31104
     },
     {
       "id": "french",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: French cuisine: a carefully plated roast duck breast with seasonal vegetables and a small amount of sauce. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/french.{avif,webp}",
-      "original": "assets/originals/genres/french.png"
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/フレンチ.jpg",
+      "sourceSha256": "b4437e5523bfbf3e4bb91b03ff8478d6d585e57aea1ea78adc77d3881e304c05",
+      "sourceWidth": 539,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/french-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 124,
+        "width": 539,
+        "height": 216
+      },
+      "width": 539,
+      "height": 216,
+      "avifBytes": 10402,
+      "webpBytes": 14086
     },
     {
       "id": "japanese",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese washoku: a neat tray with grilled fish, rice, miso soup and a small vegetable side dish. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/japanese.{avif,webp}",
-      "original": "assets/originals/genres/japanese.png"
-    },
-    {
-      "id": "ramen",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese ramen: one ceramic bowl of shoyu ramen with sliced pork, half a soft-boiled egg and scallions. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/ramen.{avif,webp}",
-      "original": "assets/originals/genres/ramen.png"
-    },
-    {
-      "id": "curry",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese curry rice: one plate with rich brown curry, rice, carrots and potatoes. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/curry.{avif,webp}",
-      "original": "assets/originals/genres/curry.png"
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/和食.jpg",
+      "sourceSha256": "5bdbc25a477baa2210a03adf458f492365d7bb501a5781d28276e824ebc5ed2e",
+      "sourceWidth": 539,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/japanese-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 32,
+        "width": 539,
+        "height": 216
+      },
+      "width": 539,
+      "height": 216,
+      "avifBytes": 12214,
+      "webpBytes": 17266
     },
     {
       "id": "soba",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Japanese soba: buckwheat noodles on a woven bamboo tray, a small dipping bowl and scallions. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/soba.{avif,webp}",
-      "original": "assets/originals/genres/soba.png"
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/そば.jpg",
+      "sourceSha256": "0579df102ddda435ad79aed7dabe763eec9a199b19a2f41b82ffffae58bd5a77",
+      "sourceWidth": 540,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/soba-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 72,
+        "width": 540,
+        "height": 216
+      },
+      "width": 540,
+      "height": 216,
+      "avifBytes": 15130,
+      "webpBytes": 24276
+    },
+    {
+      "id": "unagi",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/うなぎ.jpg",
+      "sourceSha256": "e5c0fed95d738ca8295ee475964c290e7142ee45d8ddc9d9c3f0cc1a3d20d3a1",
+      "sourceWidth": 540,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/unagi-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 72,
+        "width": 540,
+        "height": 216
+      },
+      "width": 540,
+      "height": 216,
+      "avifBytes": 12795,
+      "webpBytes": 19044
+    },
+    {
+      "id": "okonomiyaki",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/お好み焼き.jpg",
+      "sourceSha256": "d024527e8417a14cf3b8f065cb93cf0519ae39934fbdb00f87e79026afd93dbc",
+      "sourceWidth": 540,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/okonomiyaki-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 72,
+        "width": 540,
+        "height": 216
+      },
+      "width": 540,
+      "height": 216,
+      "avifBytes": 18599,
+      "webpBytes": 30098
+    },
+    {
+      "id": "afternoon_tea",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/アフタヌーンティー.jpg",
+      "sourceSha256": "0caf9429a8fe519aa7d48a9c231043b44c968701188cc1865a2056284b7cb820",
+      "sourceWidth": 800,
+      "sourceHeight": 622,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/afternoon-tea-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 151,
+        "width": 800,
+        "height": 320
+      },
+      "width": 720,
+      "height": 288,
+      "avifBytes": 14080,
+      "webpBytes": 19842
+    },
+    {
+      "id": "ethnic",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/エスニック料理.jpg",
+      "sourceSha256": "9481118b5c5753df8766d549dae32a08c17f912aa326b4a14b71109c3f62f944",
+      "sourceWidth": 640,
+      "sourceHeight": 426,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/ethnic-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 85,
+        "width": 640,
+        "height": 256
+      },
+      "width": 640,
+      "height": 256,
+      "avifBytes": 17817,
+      "webpBytes": 25196
+    },
+    {
+      "id": "izakaya",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/居酒屋.jpg",
+      "sourceSha256": "8294136257cdf39e770d7a3eab282da4f6a56807d83bca30b3253e097ed147bb",
+      "sourceWidth": 640,
+      "sourceHeight": 427,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/izakaya-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 86,
+        "width": 640,
+        "height": 256
+      },
+      "width": 640,
+      "height": 256,
+      "avifBytes": 27493,
+      "webpBytes": 40264
+    },
+    {
+      "id": "kaiseki",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/懐石料理.jpg",
+      "sourceSha256": "1e486f7fb0b2e11dbed38da3138ab14afebfc7a66eb7f561281babb39ec620ea",
+      "sourceWidth": 511,
+      "sourceHeight": 340,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/kaiseki-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 68,
+        "width": 511,
+        "height": 204
+      },
+      "width": 511,
+      "height": 204,
+      "avifBytes": 13483,
+      "webpBytes": 19940
+    },
+    {
+      "id": "yoshoku",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/洋食.jpg",
+      "sourceSha256": "64c9786e3d868b72531ceb36703b5f0549cb27669336a796c01b37c5ce4839c4",
+      "sourceWidth": 540,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/yoshoku-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 72,
+        "width": 540,
+        "height": 216
+      },
+      "width": 540,
+      "height": 216,
+      "avifBytes": 16708,
+      "webpBytes": 23460
+    },
+    {
+      "id": "teppanyaki",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/鉄板焼き.jpg",
+      "sourceSha256": "ed10f59f07b701954c1ea6aed9dabb7fff2b2b436d65ba89add5f12e8913d99a",
+      "sourceWidth": 541,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/teppanyaki-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 112,
+        "width": 541,
+        "height": 216
+      },
+      "width": 541,
+      "height": 216,
+      "avifBytes": 12836,
+      "webpBytes": 17526
+    },
+    {
+      "id": "ramen",
+      "sourcePage": "https://unsplash.com/photos/a-bowl-of-ramen-with-pork-egg-and-seaweed-qa2MS6DAUTw",
+      "photographer": "Zhang Ziyu",
+      "license": "Unsplash License",
+      "licenseUrl": "https://unsplash.com/license",
+      "sourceImage": "https://images.unsplash.com/photo-1770966666354-f43abc517327?fm=jpg&q=90&w=1600&fit=max",
+      "original": "assets/originals/genres/photos/ramen.jpg",
+      "sourceWidth": 1600,
+      "sourceHeight": 1200,
+      "output": "public/images/genres/ramen-photo.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 280,
+        "width": 1600,
+        "height": 640
+      },
+      "width": 720,
+      "height": 288,
+      "avifBytes": 19104,
+      "webpBytes": 23944
+    },
+    {
+      "id": "curry",
+      "sourcePage": "https://unsplash.com/photos/japanese-curry-rice-served-with-a-side-salad-VHUFBT6-RVU",
+      "photographer": "kaori kubota",
+      "license": "Unsplash License",
+      "licenseUrl": "https://unsplash.com/license",
+      "sourceImage": "https://images.unsplash.com/photo-1753501183108-bcbac649992d?fm=jpg&q=90&w=1600&fit=max",
+      "original": "assets/originals/genres/photos/curry.jpg",
+      "sourceWidth": 1600,
+      "sourceHeight": 2844,
+      "output": "public/images/genres/curry-photo.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 1440,
+        "width": 1600,
+        "height": 640
+      },
+      "width": 720,
+      "height": 288,
+      "avifBytes": 22251,
+      "webpBytes": 31588
     },
     {
       "id": "bakery",
-      "prompt": "Use case: photorealistic-natural. Asset type: a wide food genre thumbnail for a restaurant bookmarking web app. Subject: Bakery: two flaky croissants and a small artisan bread loaf on a ceramic plate. Natural editorial food photography, warm daylight, pale warm neutral tabletop, realistic appetizing textures, slightly overhead 45 degree view. One compact food arrangement centered within the middle of the frame; room around the plate so a 2.5:1 landscape crop keeps all important food visible. Image fills the frame, no collage, no grid, no people, no hands, no lettering, no branding, no watermark. This is generic cuisine imagery, not a real named restaurant. Landscape composition.",
-      "output": "public/images/genres/bakery.{avif,webp}",
-      "original": "assets/originals/genres/bakery.png"
+      "sourcePage": "https://unsplash.com/photos/a-bunch-of-croissants-that-are-on-a-table-sqkXyyj4WdE",
+      "photographer": "Conor Brown",
+      "license": "Unsplash License",
+      "licenseUrl": "https://unsplash.com/license",
+      "sourceImage": "https://images.unsplash.com/photo-1623334044303-241021148842?fm=jpg&q=90&w=1600&fit=max",
+      "original": "assets/originals/genres/photos/bakery.jpg",
+      "sourceWidth": 1600,
+      "sourceHeight": 1067,
+      "output": "public/images/genres/bakery-photo.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 214,
+        "width": 1600,
+        "height": 640
+      },
+      "width": 720,
+      "height": 288,
+      "avifBytes": 25514,
+      "webpBytes": 36518
     }
-  ]
+  ],
+  "reused": [
+    {
+      "id": "cafe",
+      "source": "User-provided photograph",
+      "output": "public/images/landing/coffee-provided.{avif,webp}",
+      "notes": "Existing supplied photo retained; not generated."
+    }
+  ],
+  "licenses": {
+    "unsplash": {
+      "name": "Unsplash License",
+      "url": "https://unsplash.com/license",
+      "checkedOn": "2026-10-18",
+      "commercialUse": true,
+      "modifications": true,
+      "attributionRequired": false,
+      "notes": "Not public domain. Use in the service is licensed; no sale of standalone images or competing photo library. Each source page confirmed ImageObject.isAccessibleForFree=true and license=https://unsplash.com/license."
+    }
+  }
 }

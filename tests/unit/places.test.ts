@@ -49,6 +49,15 @@ test("対応ジャンルの名称から画像を選び、曖昧な店名や焼�
   assert.equal(genreFromText("鮨 こはる"), "sushi");
   assert.equal(genreFromText("焼鳥 こはる"), "yakitori");
   assert.equal(genreFromText("中華そば こはる"), "ramen");
+  assert.equal(genreFromText("和食・懐石料理"), "kaiseki");
+  assert.equal(genreFromText("居酒屋 焼き鳥 こはる"), "yakitori");
+  assert.equal(genreFromText("カフェ アフタヌーンティー"), "afternoon_tea");
+  assert.equal(genreFromText("うなぎ"), "unagi");
+  assert.equal(genreFromText("お好み焼・鉄板焼"), "okonomiyaki");
+  assert.equal(genreFromText("鉄板焼き"), "teppanyaki");
+  assert.equal(genreFromText("洋食"), "yoshoku");
+  assert.equal(genreFromText("タイ料理"), "ethnic");
+  assert.equal(genreFromText("居酒屋"), "izakaya");
   assert.equal(genreFromText("焼きそば専門店"), null);
   assert.equal(genreFromText("こはる"), null);
   assert.equal(isGenre("toString"), false);

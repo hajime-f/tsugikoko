@@ -72,7 +72,9 @@ export async function fetchPageFacts(url: string, infer: AiExtractor, fetcher: t
     redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(8000),
     headers: { "User-Agent": "Tsugikoko/0.1 (+https://tsugikoko--tsugikoko.asia-east1.hosted.app)", Accept: "text/html" },
   });
-  if (!response.ok || !response.headers.get("content-type")?.includes("text/html") || !response.body) throw new Error("Source unavailable");
+  const contentType = response.headers.get("content-type") ?? "";
+  // 原因の切り分け用。URLや本文はエラーに含めない。
+  if (!response.ok || !contentType.includes("text/html") || !response.body) throw new Error(`Source unavailable: HTTP ${response.status} ${contentType.split(";")[0] || "-"}`);
   const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0;
   while (true) {
     const { done, value } = await reader.read(); if (done) break;

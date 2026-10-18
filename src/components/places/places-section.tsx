@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Bookmark, Check, Coffee, ExternalLink, Link2, LoaderCircle, LockKeyhole, MapPin, Pencil, Plus, RotateCcw, Search, Star, Trash2, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -19,7 +19,7 @@ function PlaceArtwork({ id, genre }: { id: string; genre: Genre | null }) {
   return <><span className="place-art" aria-hidden="true"><Motif size={32} strokeWidth={1.5} /></span>{item && <span className="place-genre-caption place-genre-text">{item.label}</span>}</>;
 }
 
-export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { draft: string; onSaved: () => void; revision?: number; onChanged?: () => void }) {
+export function PlacesSection({ draft, onSaved, revision = 0, onChanged, beforeList }: { draft: string; onSaved: () => void; revision?: number; onChanged?: () => void; beforeList?: ReactNode }) {
   const { user } = useAuth();
   const [url, setUrl] = useState(draft);
   const [places, setPlaces] = useState<SavedPlace[]>([]);
@@ -205,6 +205,8 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       <p className="places-message" role="status">{message}</p>
       {error && <div className="places-error" role="alert">{error}{saveFailed && <p>URLは入力欄に残しています。</p>}<button type="button" className="text-button" disabled={loading || busy} onClick={() => { if (saveFailed) void registerUrl(url); else void reload(); }}>{saveFailed ? "保存を再試行" : "一覧を再読み込み"}</button></div>}
     </section>
+
+    {beforeList}
 
     <section className="my-places-section" id="my-places" aria-labelledby="my-places-title">
       <div className="places-toolbar">

@@ -13,7 +13,7 @@ const candidates: Recommendation[] = Array.from({ length: 12 }, (_, index) => ({
 
 test("おすすめを追加表示し、保存・興味なし・設定での解除を行う", async ({ page }, info) => {
   const saved: Recommendation[] = [], dismissed: Recommendation[] = [];
-  let reads = 0, failNextPage = true, failSave = true;
+  let failNextPage = true, failSave = true;
   await page.route("**/api/places?*", route => route.fulfill({ json: { places: saved.map(item => ({ ...item, sourceUrls: [item.url], sourceLabel: "example.com", note: "", extraction: "ready", visitCount: 0, visibility: "private", createdAt: Date.now(), updatedAt: Date.now() })), nextCursor: null } }));
   await page.route(/\/api\/recommendations(?:\?|$)/, async route => {
     const request = route.request(), params = new URL(request.url()).searchParams;
@@ -29,7 +29,6 @@ test("おすすめを追加表示し、保存・興味なし・設定での解�
       await route.fulfill({ json: action === "save" ? { place: item, duplicate: false } : { ok: true } }); return;
     }
     if (params.has("dismissed")) { await route.fulfill({ json: { items: dismissed, nextCursor: null } }); return; }
-    reads++;
     if (params.has("cursor") && failNextPage) { failNextPage = false; await route.fulfill({ status: 503, json: { error: "おすすめの続きを読み込めませんでした。" } }); return; }
     const available = candidates.filter(item => !saved.includes(item) && !dismissed.includes(item));
     const offset = Number(params.get("cursor") ?? 0);
@@ -38,7 +37,6 @@ test("おすすめを追加表示し、保存・興味なし・設定での解�
   await page.goto("/login");
   await providerLogin(page, "Googleでログイン", `recommendations-${info.project.name}-${Date.now()}@example.test`);
   await expect(page.getByRole("heading", { name: "あなたのマイリスト" })).toBeAttached();
-  expect(reads).toBe(0);
   const section = page.locator("#for-you");
   await section.scrollIntoViewIfNeeded();
   await expect(section.getByRole("article")).toHaveCount(10);
@@ -109,6 +107,9 @@ test("実APIで他ユーザーの保存から推薦し、個人の追記を漏�
   const database = getFirestore(app);
   const suffix = `${info.project.name}-${Date.now()}`;
   const email = `real-recommendations-${suffix}@example.test`;
+  let release: () => void = () => {};
+  const prepared = new Promise<void>(resolve => { release = resolve; });
+  await page.route(/\/api\/recommendations(?:\?|$)/, async route => { await prepared; await route.continue(); });
   await page.goto("/login");
   await providerLogin(page, "Googleでログイン", email);
   await expect(page.getByRole("heading", { name: "あなたのマイリスト" })).toBeAttached();
@@ -138,6 +139,7 @@ test("実APIで他ユーザーの保存から推薦し、個人の追記を漏�
   await database.doc("recommendationModel/current").delete();
   const section = page.locator("#for-you");
   const apiResponse = page.waitForResponse(response => response.url().endsWith("/api/recommendations") && response.request().method() === "GET");
+  release();
   await section.scrollIntoViewIfNeeded();
   const response = await apiResponse;
   expect(response.status()).toBe(200);

@@ -650,7 +650,7 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 }
 
 /* おすすめは共通の店舗情報だけを表示する。 */
-.recommendations-panel { margin-top: 36px; padding: 30px 24px; border-radius: 24px; background: #eef3e7; scroll-margin-top: 16px; }
+.recommendations-panel { margin: 0 0 36px; padding: 30px 24px; border-radius: 24px; background: #eef3e7; scroll-margin-top: 16px; }
 .recommendations-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .recommendations-heading h2 { display: flex; align-items: center; gap: 8px; font-size: 24px; }
 .recommendations-heading > button { flex-shrink: 0; min-height: 44px; }
@@ -689,7 +689,7 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .recommendation-settings button { min-height: 44px; flex-shrink: 0; }
 @media (max-width: 1000px) { .recommendation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) {
-  .recommendations-panel { padding: 24px 16px; }
+  .recommendations-panel { margin-bottom: 26px; padding: 24px 16px; }
   .recommendations-heading { flex-wrap: wrap; gap: 4px; }
   .recommendations-heading h2 { font-size: 21px; }
   .recommendations-heading > button { font-size: 12px; }

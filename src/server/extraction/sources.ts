@@ -6,7 +6,7 @@ import { analyzePage, type ExtractionResult } from "./parser";
 import { normalizePlaceUrl } from "../../lib/places/schema";
 
 export const EXTRACTION_VERSION = "json-ld-v2";
-const USER_AGENT = "Tsugikoko/0.1 (+https://tsugikoko--tsugikoko.asia-east1.hosted.app)";
+const USER_AGENT = "Tsugikoko/0.1 (+https://tsugikoko.com)";
 const ROBOTS_AGENT = "tsugikoko";
 const MAX_PAGE_BYTES = 1_500_000, MAX_ROBOTS_BYTES = 500_000, TIMEOUT_MS = 8000;
 

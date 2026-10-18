@@ -579,3 +579,43 @@ test("5件の登録を祝い、閉じた節目は再読込と重複保存でも�
   await expect(notice).toHaveCount(0);
   expect((await database.doc(`users/${uid}/milestones/state`).get()).get("shownThreshold")).toBe(20);
 });
+
+test("SNS共有は店名とURLだけを渡し、コピーと端末共有に対応する", async ({ page }, info) => {
+  const [place] = listFixtures(1);
+  Object.assign(place, { name: "寿司 & カフェ #1", url: "https://example.com/cafe?a=1&b=2", note: "非公開の秘密メモ", latestVisit: { rating: 4, visitedOn: "2026-10-18" }, visitCount: 1 });
+  const preview = `${place.name}\n${place.url}`;
+  await page.route("**/api/places?*", route => route.fulfill({ json: { places: [place], nextCursor: null } }));
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => { sessionStorage.setItem("test:copied", text); } } });
+    Object.defineProperty(navigator, "share", { configurable: true, value: async (data: ShareData) => { sessionStorage.setItem("test:shared", JSON.stringify(data)); throw new DOMException("Cancelled", "AbortError"); } });
+  });
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `share-${info.project.name}-${Date.now()}@example.test`);
+  const card = page.getByRole("article", { name: place.name, exact: true });
+  await card.getByRole("button", { name: "共有", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("textbox", { name: "投稿内容" })).toHaveValue(preview);
+  await expect(dialog).not.toContainText(place.note);
+  for (const [label, endpoint] of [["Xで投稿", "https://x.com/intent/tweet"], ["LINEで送る", "https://social-plugins.line.me/lineit/share"]]) {
+    const link = dialog.getByRole("link", { name: label });
+    const url = new URL((await link.getAttribute("href"))!);
+    expect(url.origin + url.pathname).toBe(endpoint);
+    expect(Object.fromEntries(url.searchParams)).toEqual({ text: place.name, url: place.url });
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  }
+  await dialog.getByRole("button", { name: "投稿文をコピー" }).click();
+  await expect(dialog.getByRole("status")).toContainText("コピーしました");
+  expect(await page.evaluate(() => sessionStorage.getItem("test:copied"))).toBe(preview);
+  await dialog.getByRole("button", { name: "その他の共有" }).click();
+  expect(JSON.parse((await page.evaluate(() => sessionStorage.getItem("test:shared")))!)).toEqual({ text: place.name, url: place.url });
+  await expect(dialog.getByRole("status")).toHaveText("");
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("denied"); } } }));
+  await dialog.getByRole("button", { name: "投稿文をコピー" }).click();
+  await expect(dialog.getByRole("status")).toContainText("コピーできませんでした");
+  await expect(dialog.getByRole("textbox", { name: "投稿内容" })).toHaveValue(preview);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath("share-dialog.png") });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "共有", exact: true })).toBeFocused();
+});

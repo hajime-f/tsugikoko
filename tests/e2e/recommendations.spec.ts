@@ -48,6 +48,9 @@ test("おすすめを追加表示し、保存・興味なし・設定での解�
   await section.getByRole("button", { name: "もう一度読み込む" }).click();
   await expect(section.getByRole("article")).toHaveCount(12);
   const first = section.getByRole("article", { name: "おすすめ：おすすめ寿司 1", exact: true });
+  await first.getByRole("button", { name: "共有", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("textbox", { name: "投稿内容" })).toHaveValue(`${candidates[0].name}\n${candidates[0].url}`);
+  await page.keyboard.press("Escape");
   const mapLink = first.getByRole("link", { name: /Google マップで開く/ });
   await expect(mapLink).toHaveAttribute("target", "_blank");
   const mapUrl = new URL((await mapLink.getAttribute("href"))!);

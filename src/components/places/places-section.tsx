@@ -1,5 +1,7 @@
 "use client";
 
+import { SharePlaceButton } from "@/components/places/share-place-button";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bookmark, Check, Coffee, ExternalLink, Link2, LoaderCircle, LockKeyhole, MapPin, Pencil, Plus, RotateCcw, Search, Star, Trash2, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -247,6 +249,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
             <div className="place-visit-actions">{!place.deleted && <button className="button button-dark" disabled={busy} onClick={() => setVisitDialog({ place, mode: "add" })}><Check size={16} />{place.visitCount > 0 ? "再訪を記録" : "行ってきた"}</button>}{place.visitCount > 0 && <button className="text-button" disabled={busy} onClick={() => setVisitDialog({ place, mode: "history" })}>訪問履歴（{place.visitCount}）</button>}</div>
             <div className="place-actions">{place.deleted ? <button disabled={busy} onClick={() => void action(place, "restore")}><RotateCcw size={15} />元に戻す</button> : <>
               <button className={!place.name.trim() ? "place-edit-prominent" : undefined} disabled={busy} onClick={() => edit(place)}><Pencil size={15} />編集</button>
+              <SharePlaceButton name={place.name} url={place.url} disabled={busy} />
               <button disabled={busy} aria-label={`${place.name || place.sourceLabel}をごみ箱へ移す`} onClick={() => { setModalError(""); setModal({ mode: "trash", place }); }}><Trash2 size={15} />削除</button>
             </>}</div>
           </article>)}</div>}

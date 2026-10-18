@@ -1,5 +1,7 @@
 "use client";
 
+import { SharePlaceButton } from "@/components/places/share-place-button";
+
 import { MapAddressLink } from "@/components/ui/map-address-link";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -124,7 +126,7 @@ export function RecommendationsSection({ revision, onSaved, onSettings }: { revi
       const genre = isGenre(item.genre) ? genres[item.genre] : null;
       return <article className="recommendation-card" key={item.id} aria-label={`おすすめ：${item.name}`}>
         <div className="recommendation-photo">{genre?.image ? <picture><source type="image/avif" srcSet={`${genre.image}.avif`} /><img src={`${genre.image}.webp`} alt={`${genre.label}のイメージ写真（実店舗の写真ではありません）`} width={720} height={288} loading="lazy" decoding="async" /></picture> : <Sparkles size={36} aria-hidden="true" />}{genre && <span>{genre.label}・イメージ</span>}</div>
-        <div className="recommendation-body"><p className="recommendation-reason"><Sparkles size={14} />{reasons[item.reason]}</p><h3>{item.name}</h3><p className="recommendation-address"><MapAddressLink name={item.name} address={item.address} /></p><a className="recommendation-source" href={item.url} target="_blank" rel="noopener noreferrer">お店の掲載ページを見る<ExternalLink size={15} /></a><div className="recommendation-actions"><button className="button button-dark" disabled={Boolean(busy) || loading} onClick={() => void act(item, "save")}>{busy === item.id ? <LoaderCircle size={17} className="spinning" /> : <Bookmark size={17} />}行きたいに保存</button><button className="text-button" disabled={Boolean(busy) || loading} onClick={() => void act(item, "dismiss")}><X size={15} />興味なし</button></div></div>
+        <div className="recommendation-body"><p className="recommendation-reason"><Sparkles size={14} />{reasons[item.reason]}</p><h3>{item.name}</h3><p className="recommendation-address"><MapAddressLink name={item.name} address={item.address} /></p><a className="recommendation-source" href={item.url} target="_blank" rel="noopener noreferrer">お店の掲載ページを見る<ExternalLink size={15} /></a><div className="recommendation-actions"><button className="button button-dark" disabled={Boolean(busy) || loading} onClick={() => void act(item, "save")}>{busy === item.id ? <LoaderCircle size={17} className="spinning" /> : <Bookmark size={17} />}行きたいに保存</button><button className="text-button" disabled={Boolean(busy) || loading} onClick={() => void act(item, "dismiss")}><X size={15} />興味なし</button><SharePlaceButton name={item.name} url={item.url} className="text-button" disabled={Boolean(busy) || loading} /></div></div>
       </article>;
     })}</div>
     {loading && <p className="places-loading" role="status"><LoaderCircle size={20} className="spinning" />おすすめを読み込んでいます...</p>}

@@ -7,7 +7,7 @@ export const providers = [
   { id: "apple.com", name: "Apple", mark: "A" },
 ] as const;
 export type ProviderId = typeof providers[number]["id"];
-const enabled = (process.env.NEXT_PUBLIC_AUTH_PROVIDERS ?? "google.com").split(",").map(id => id.trim());
+const enabled = (process.env.NEXT_PUBLIC_AUTH_PROVIDERS ?? "google.com,twitter.com").split(",").map(id => id.trim());
 export const isProviderEnabled = (id: ProviderId) => enabled.includes(id);
 
 export function createProvider(id: ProviderId) {

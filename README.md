@@ -20,7 +20,7 @@ http://127.0.0.1:3000 を開きます。
 ## 現在の実装
 
 - スマートフォン中心のログイン前トップページ
-- Firebase AuthenticationによるGoogle登録・ログイン・ログアウト
+- Firebase AuthenticationによるGoogle・Xの登録・ログイン・ログアウト
 - URLからの店舗登録、非公開マイリスト、店名・住所・メモの編集、30日間のごみ箱
 - 公式サイトなどの構造化データ（JSON-LD）からの店名・住所・料理ジャンルの自動入力。取得できない場合は手入力
 - 非公開の訪問記録（訪問日・任意の星1〜5・任意の感想）、再訪履歴、記録の編集・削除
@@ -31,7 +31,7 @@ http://127.0.0.1:3000 を開きます。
 - 保存操作を試せる画面内デモ
 - モバイルメニュー、FAQ、プライバシー説明、画像クレジット
 
-Google認証と店舗保存は実際のFirebaseに接続します。訪問記録・評価と、ユーザー横断のレコメンドを利用できます。ログイン前にURLを入力して「保存してはじめる」を押すと、ログイン完了後にFirestoreへ非公開で自動保存します。URLは保存成功まで`sessionStorage`でログインしたユーザーにひも付けて保持し、失敗時は入力欄から再試行できます。再読み込みや同じURLの再試行でも、サーバーで重複を防ぎます。未保存のURLはログアウト時に消去しますが、登録済みの店舗はログアウト後も残ります。試作中は検索エンジン向けにnoindexを指定しています。
+Google・X認証と店舗保存は実際のFirebaseに接続します。訪問記録・評価と、ユーザー横断のレコメンドを利用できます。ログイン前にURLを入力して「保存してはじめる」を押すと、ログイン完了後にFirestoreへ非公開で自動保存します。URLは保存成功まで`sessionStorage`でログインしたユーザーにひも付けて保持し、失敗時は入力欄から再試行できます。再読み込みや同じURLの再試行でも、サーバーで重複を防ぎます。未保存のURLはログアウト時に消去しますが、登録済みの店舗はログアウト後も残ります。試作中は検索エンジン向けにnoindexを指定しています。
 
 ## 認証設定
 
@@ -40,22 +40,24 @@ Google認証と店舗保存は実際のFirebaseに接続します。訪問記録
 - Firebase Authenticationの承認済みドメインに、公開ドメイン・`localhost`・`127.0.0.1`を設定済みです。同一メールアドレスで複数アカウントを作成する設定は無効です。
 - 認証はFirebase SDKのポップアップを利用します。閉じた場合・ブロック・通信失敗は画面内で案内します。SNS内ブラウザではSafari/Chromeで開き直してください。
 - 初回認証はアカウント登録を兼ねます。既存ユーザーには以前と同じ方法を選ぶよう案内し、新しい方法はログイン後に`linkWithPopup`で同一UIDへ連携します。メールアドレスや表示名だけで独自に統合しません。
-- X・Facebook・Appleのログイン・連携コードは実装済みですが、各サービスの開発者アプリ設定が必要です。未設定の方法は「準備中」と表示します。
+- Xのログイン・既存アカウントへの連携を有効化しています。Facebook・Appleも処理は実装済みですが、外部設定が未完了なので「準備中」と表示します。
 
 ### X・Facebook・Appleの設定手順
 
-アプリには3つの認証・既存アカウントへの連携処理があります。2026年10月19日時点では各サービスの開発者アプリが未作成で、Firebaseの本番設定もGoogleだけです。外部サービスの設定が済むまでは「準備中」と表示します。
+アプリには3つの認証・既存アカウントへの連携処理があります。2026年10月19日時点でGoogleとXはFirebase側の設定を確認し、本番で有効化しています。Facebook・Appleは外部設定が済むまで「準備中」と表示します。
 
 共通して使う値：
 
 | 項目 | 値 |
 | --- | --- |
-| サイトURL | `https://tsugikoko--tsugikoko.asia-east1.hosted.app` |
+| サイトURL | `https://tsugikoko.com` |
 | コールバック／リダイレクト／Return URL | `https://tsugikoko.firebaseapp.com/__/auth/handler` |
 | Firebaseプロジェクト | `tsugikoko` |
 | Firebase認証設定 | [Authentication → ログイン方法](https://console.firebase.google.com/project/tsugikoko/authentication/providers) |
 
 X：
+
+現時点の確認：FirebaseのTwitterプロバイダーとキー登録、承認済みドメインは確認済みです。ただし本番の認証開始はXから`401 / code 32 / Could not authenticate you`が返るため、OAuth 1.0a設定とAPI Key・API Key Secretの組み合わせを再確認する必要があります。アプリ側の登録・再ログイン・連携・解除はエミュレーターで検証済みですが、本番のXログイン完了は未確認です。
 
 1. [X Developer Console](https://console.x.com/)で開発者アカウントとアプリを作成し、ユーザー認証（OAuth 1.0a）を設定します。Firebaseでは表示名が引き続き「Twitter」の場合があります。
 2. アプリのコールバックURLとサイトURLに上表の値を指定します。投稿の権限は必要ありません。
@@ -85,6 +87,12 @@ Apple：
 4. Firebaseの「承認済みドメイン」に本番ホストがあることも確認します。SNS内ブラウザでポップアップが開けない場合はSafariやChromeで開き直します。
 
 `/home`の表示制御に加え、店舗APIはFirebase Admin SDKでIDトークンと失効を検証します。所有者はトークンのUIDから決定し、入力からは受け取りません。Firestore Rulesでクライアントからの直接アクセスを拒否し、個人データは認証済みAPIだけで扱います。応答は`private, no-store`です。
+
+## 独自ドメインとSNS共有
+
+公開URLは`https://tsugikoko.com`です。`src/lib/site.ts`で管理し、トップページのcanonical・OGPに使用します。認証用の`authDomain`とコールバックは`tsugikoko.firebaseapp.com`を維持し、Cloud Tasksの内部配送先は`hosted.app`のままにします。Firebaseの承認済みドメインには`tsugikoko.com`と`www.tsugikoko.com`を登録済みです。旧ドメインから移動した際は、ブラウザのログイン状態がドメインごとに保存されるため再ログインしてください。
+
+マイリスト・おすすめカードの「共有」から投稿内容を確認し、X・LINEの投稿画面へ進めます。対応端末では標準の共有メニューも利用でき、投稿文のコピーにも対応します。共有するのは店名と元ページのURLだけで、メモ・訪問記録・評価・UIDは含めません。記録の公開設定は変更しません。SNSへの最終送信は本人が各SNSで行い、投稿APIや投稿用アクセストークンは利用しません。XでのログインとXへの共有は別の機能で、共有にはツギココへのX連携は必要ありません。
 
 ## 動作確認
 
@@ -182,7 +190,7 @@ Google Cloudプロジェクト`tsugikoko`を作成済みです。`.firebaserc`�
 
 2026年10月18日にFirebaseの有効化・既存請求先への接続（Blaze）・初回デプロイを完了しました。リージョンは`asia-east1`（台湾）です。
 
-公開URL: https://tsugikoko--tsugikoko.asia-east1.hosted.app
+公開URL: https://tsugikoko.com
 
 更新時はこのディレクトリから実行します。
 
@@ -196,7 +204,7 @@ firebase deploy --only apphosting:tsugikoko --project tsugikoko
 公開環境の表示・操作確認は次のコマンドで実行できます。
 
 ```sh
-E2E_BASE_URL=https://tsugikoko--tsugikoko.asia-east1.hosted.app npm run test:e2e
+E2E_BASE_URL=https://tsugikoko.com npm run test:e2e
 ```
 
 ## 画像

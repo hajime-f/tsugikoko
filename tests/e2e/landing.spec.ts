@@ -7,6 +7,8 @@ test("トップページが表示され、画像・画面幅・実行時エラ�
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("気になったら、ツギココ。");
   await expect(page).toHaveTitle(/ツギココ/);
   await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://tsugikoko.com");
+  await expect(page.locator('meta[property="og:url"]')).toHaveAttribute("content", "https://tsugikoko.com");
   const hero = page.locator(".hero-image");
   await expect(hero).toBeVisible();
   await expect.poll(() => hero.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
@@ -35,7 +37,8 @@ test("URLを検証し、入力を保持したままログイン案内を開く",
   await expect(dialog).toContainText("https://example.com/cafe");
   await expect(dialog).toContainText("ログインが完了すると、このURLを非公開のマイリストに自動で保存します");
   await expect(dialog.getByRole("button", { name: /Googleではじめる/ })).toBeEnabled();
-  for (const provider of ["X", "Facebook", "Apple"]) {
+  await expect(dialog.getByRole("button", { name: "Xではじめる", exact: true })).toBeEnabled();
+  for (const provider of ["Facebook", "Apple"]) {
     await expect(dialog.getByRole("button", { name: new RegExp(`${provider}ではじめる`) })).toBeDisabled();
   }
   await page.keyboard.press("Escape");

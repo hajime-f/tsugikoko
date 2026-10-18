@@ -135,6 +135,8 @@ test("スクロールで続きを読み込み、失敗の再試行と自動更�
   await providerLogin(page, "Googleでログイン", `lazy-${info.project.name}-${Date.now()}@example.test`);
   await expect(page.getByRole("article")).toHaveCount(30);
   expect(cursors).toEqual([0]);
+  await expect(page.locator(".member-header").getByRole("navigation")).toHaveCount(0);
+  await expect(page.locator(".member-header").getByRole("button", { name: "アカウントを開く" })).toBeVisible();
   await page.getByRole("button", { name: "もっと見る", exact: true }).scrollIntoViewIfNeeded();
   const retry = page.getByRole("button", { name: "続きを再読み込み", exact: true });
   await expect(retry).toBeVisible();
@@ -164,8 +166,9 @@ test("スクロールで続きを読み込み、失敗の再試行と自動更�
   expect(scrollY).toBeGreaterThan(1000);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("article", { name: "カフェ 50", exact: true }).scrollIntoViewIfNeeded();
-  await expect(page.getByRole("heading", { name: "あなたのマイリスト", exact: true })).toBeInViewport();
-  await expect(page.getByRole("tab", { name: "行きたい", exact: true })).toBeInViewport();
+  await expect(page.getByRole("heading", { name: "あなたのマイリスト", exact: true })).not.toBeInViewport();
+  await expect(page.getByRole("search", { name: "マイリストを検索" })).not.toBeInViewport();
+  await expect(page.getByRole("tab", { name: "行きたい", exact: true })).not.toBeInViewport();
   await page.screenshot({ path: info.outputPath("my-list-scrolled.png") });
 });
 

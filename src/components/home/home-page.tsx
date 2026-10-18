@@ -57,7 +57,6 @@ export function HomePage() {
     <header className="member-header">
       <div className="member-header-inner">
         <a className="brand" href="/home" aria-label="ツギココ ホーム"><span className="brand-symbol"><MapPin size={28} strokeWidth={2.8} /></span><span>ツギ<span className="brand-accent">ココ.</span></span></a>
-        <nav aria-label="メインナビゲーション" className="member-desktop-nav"><a href="#member-main" aria-current="page">ホーム</a><a href="#my-places">マイリスト</a><a href="#for-you">あなたへのおすすめ</a></nav>
         <button className="account-trigger" onClick={openAccount} aria-label="アカウントを開く"><UserAvatar key={user.uid} photoURL={photoURL} initial={initial} /><span className="account-trigger-label">アカウント</span><ChevronRight size={16} /></button>
       </div>
     </header>

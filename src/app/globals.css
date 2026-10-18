@@ -351,10 +351,6 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .member-page { min-height: 100dvh; background: #fff; }
 .member-header { border-bottom: 1px solid var(--line); background: #fff; }
 .member-header-inner { max-width: 1280px; margin-inline: auto; height: 84px; padding-inline: 40px; display: flex; align-items: center; gap: 65px; }
-.member-desktop-nav { display: flex; gap: 28px; font-size: 13px; align-self: stretch; }
-.member-desktop-nav a { display: flex; align-items: center; border-bottom: 3px solid transparent; padding-top: 3px; }
-.member-desktop-nav a[aria-current] { color: var(--green); border-bottom-color: var(--green); font-weight: 700; }
-.member-desktop-nav a:hover { color: var(--green); }
 .account-trigger { display: flex; gap: 10px; align-items: center; background: transparent; margin-left: auto; font-size: 12px; color: var(--ink); padding: 8px 0 8px 8px; }
 .user-avatar { display: inline-grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; color: #356346; background: #e9efdf; font-size: 16px; font-weight: 700; }
 .user-avatar img { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: cover; border-radius: inherit; }
@@ -436,7 +432,6 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .feature-status { font-size: 12px; line-height: 1.8; background: #f2f5ec; padding: 15px; border-radius: 6px; margin-top: 25px; color: #506347; }
 @media (max-width: 1000px) {
   .member-header-inner { gap: 35px; padding-inline: 28px; }
-  .member-desktop-nav { gap: 20px; font-size: 12px; }
   .account-trigger-label { display: none; }
   .member-main { padding-inline: 28px; }
   .member-hero-copy { padding: 36px 28px; }
@@ -460,7 +455,6 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
   .dialog-description { font-size: 13px; }
   .auth-footnote { font-size: 11px; }
   .member-header-inner { height: 70px; padding-inline: 20px; }
-  .member-desktop-nav { display: none; }
   .member-main { padding: 23px 20px 90px; }
   .home-greeting { margin-bottom: 18px; }
   .home-greeting > p { font-size: 12px; }
@@ -515,7 +509,7 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .places-error .text-button { display: block; margin-top: 8px; }
 .places-loading { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); padding: 45px 0; font-size: 14px; }
 .my-places-section { background: #f5f4ee; padding: 0 24px 24px; border-radius: 26px; scroll-margin-top: 16px; }
-.places-toolbar { position: sticky; top: 0; z-index: 20; padding-top: 24px; background: #f5f4eef5; backdrop-filter: blur(12px); border-radius: 26px 26px 0 0; }
+.places-toolbar { padding-top: 24px; background: #f5f4ee; border-radius: 26px 26px 0 0; }
 .places-toolbar .member-section-heading { margin-bottom: 14px; }
 .places-toolbar-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .places-add { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--green); color: white; }
@@ -541,7 +535,7 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .places-search-empty p { font-size: 13px; line-height: 1.8; }
 .places-search-empty button { min-height: 44px; }
 .saved-place-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding-top: 22px; }
-.saved-place-card { --card-wash: #e4edd9; --card-shape: #cbdcba; --card-ink: #405e38; min-width: 0; display: flex; flex-direction: column; background: #fff; border: 1px solid #e6e5dc; border-radius: 18px; padding: 22px; box-shadow: 0 4px 16px #333b2510; scroll-margin-top: 340px; }
+.saved-place-card { --card-wash: #e4edd9; --card-shape: #cbdcba; --card-ink: #405e38; min-width: 0; display: flex; flex-direction: column; background: #fff; border: 1px solid #e6e5dc; border-radius: 18px; padding: 22px; box-shadow: 0 4px 16px #333b2510; scroll-margin-top: 16px; }
 .saved-place-card[data-tone="1"] { --card-wash: #f5e2d6; --card-shape: #e9c4af; --card-ink: #8a4a31; }
 .saved-place-card[data-tone="2"] { --card-wash: #f3eacb; --card-shape: #e7d59a; --card-ink: #776026; }
 .saved-place-card[data-tone="3"] { --card-wash: #dfece9; --card-shape: #bdd7d0; --card-ink: #365f56; }
@@ -642,11 +636,6 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
   .saved-place-top { margin: -20px -20px 18px; padding: 16px 20px; }
   .place-art { width: 56px; height: 56px; }
   .trash-toggle { margin-top: 12px; font-size: 12px; }
-}
-
-@media (max-height: 600px) {
-  .places-toolbar { position: static; }
-  .saved-place-card { scroll-margin-top: 16px; }
 }
 
 /* おすすめは共通の店舗情報だけを表示する。 */

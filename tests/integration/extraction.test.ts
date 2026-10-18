@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { database } from "../../src/server/firebase/admin";
 import { claimDispatch, createPlace, listPlaces, listVisits, processExtraction, updatePlace, updateVisit } from "../../src/server/places/service";
 import { extractionTarget, type PageFetcher } from "../../src/server/extraction/sources";
+import { normalizePlaceUrl } from "../../src/lib/places/schema";
 
 if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.GCLOUD_PROJECT !== "demo-tsugikoko") throw new Error("Local demo emulator required");
 const today = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -323,4 +324,95 @@ test("統合前の喫茶店ジャンルが残る記録・取得キャッシュ�
   const record = await database().doc(`users/${uid}/savedPlaces/${cached.id}`).get();
   assert.equal(record.get("name"), "喫茶 キャッシュ");
   assert.equal(record.get("genre"), "cafe");
+});
+
+test("同じURLを保存する人には店名・住所・ジャンルだけを初期値として渡し、メモや未設定・あとからの変更は共有しない", async () => {
+  const a = `share-a-${randomUUID()}`, b = `share-b-${randomUUID()}`, c = `share-c-${randomUUID()}`;
+  const url = `https://tabelog.com/tokyo/A1303/A130302/${String(Date.now()).slice(-8)}/`;
+  const first = (await createPlace(a, url)).place;
+  await updatePlace(a, first.id, { name: "共有される店名", address: "東京都渋谷区恵比寿1-2-3", note: "Aだけのメモ", genre: "sushi" });
+  // 別の人が同じURL（追跡パラメータ付き）を保存すると、店名・住所・ジャンルが初期値になる。
+  const second = (await createPlace(b, normalizePlaceUrl(`${url}?utm_source=sns`))).place;
+  assert.deepEqual([second.name, second.address, second.genre, second.note], ["共有される店名", "東京都渋谷区恵比寿1-2-3", "sushi", ""]);
+  const stored = await database().doc(`users/${b}/savedPlaces/${second.id}`).get();
+  assert.equal(stored.get("editedFields"), undefined);
+  // 共通情報には店名・住所・ジャンルと更新日時だけを保存する。
+  const shared = await database().doc(`urlFacts/${sourceHash(url)}`).get();
+  assert.deepEqual(Object.keys(shared.data()!).sort(), ["address", "genre", "name", "updatedAt"]);
+  // 本人の「未設定」は共有しない。あとからの変更は、すでに保存した他人の記録を書き換えない。
+  await updatePlace(a, first.id, { name: "共有される店名", address: "東京都渋谷区恵比寿1-2-3", note: "", genre: null });
+  await updatePlace(b, second.id, { name: "Bが直した店名", address: "", note: "Bのメモ" });
+  assert.equal((await database().doc(`users/${a}/savedPlaces/${first.id}`).get()).get("name"), "共有される店名");
+  assert.equal((await database().doc(`urlFacts/${sourceHash(url)}`).get()).get("genre"), "sushi");
+  // 次に保存する人には最新の入力を使う。空の住所では前の住所を消さない。
+  const third = (await createPlace(c, url)).place;
+  assert.deepEqual([third.name, third.address, third.genre, third.note], ["Bが直した店名", "東京都渋谷区恵比寿1-2-3", "sushi", ""]);
+  assert.equal(JSON.stringify(third).includes("メモ"), false);
+  // 古い店名を持ったままメモだけを編集しても、ほかの人の新しい入力を巻き戻さない。
+  await updatePlace(a, first.id, { name: "Aの新しい店名", address: "東京都渋谷区恵比寿1-2-3", note: "", genre: "sushi" });
+  await updatePlace(c, third.id, { name: third.name, address: third.address, note: "Cのメモだけ編集", genre: "sushi" });
+  const fourth = (await createPlace(`share-d-${randomUUID()}`, url)).place;
+  assert.deepEqual([fourth.name, fourth.address, fourth.genre], ["Aの新しい店名", "東京都渋谷区恵比寿1-2-3", "sushi"]);
+});
+
+test("同じURLの共通情報より、ページから確認できた店舗情報を優先する", async () => {
+  const url = `https://shared-jsonld-${randomUUID().slice(0, 8)}.example.com/`;
+  const a = `share-json-a-${randomUUID()}`, b = `share-json-b-${randomUUID()}`;
+  const first = (await createPlace(a, url)).place;
+  await updatePlace(a, first.id, { name: "手入力の店名", address: "", note: "", genre: "cafe" });
+  const second = (await createPlace(b, url)).place;
+  assert.equal(second.name, "手入力の店名");
+  await processExtraction(b, second.id, { fetcher: mockPages({ [url]: jsonLd("ページの店名", "東京都渋谷区恵比寿9-9-9") }) });
+  const record = await database().doc(`users/${b}/savedPlaces/${second.id}`).get();
+  assert.deepEqual([record.get("name"), record.get("address"), record.get("genre")], ["ページの店名", "東京都渋谷区恵比寿9-9-9", "cafe"]);
+});
+
+test("保存件数の節目は、ごみ箱・重複登録を数えず、表示済みの節目を削除・再登録で繰り返さない", async () => {
+  const { markMilestoneShown, milestoneStatus } = await import("../../src/server/milestones/service");
+  const uid = `milestone-${randomUUID()}`;
+  const ids: string[] = [];
+  for (let n = 0; n < 5; n++) ids.push((await createPlace(uid, `https://www.instagram.com/p/milestone${n}/`)).place.id);
+  await createPlace(uid, "https://www.instagram.com/p/milestone0/");
+  assert.deepEqual(await milestoneStatus(uid), { total: 5, pending: 5 });
+  await assert.rejects(markMilestoneShown(uid, 10), /保存件数が変わりました/);
+  await markMilestoneShown(uid, 5);
+  assert.deepEqual(await milestoneStatus(uid), { total: 5, pending: null });
+  await updatePlace(uid, ids[0], { action: "trash" });
+  assert.deepEqual(await milestoneStatus(uid), { total: 4, pending: null });
+  await updatePlace(uid, ids[0], { action: "restore" });
+  assert.deepEqual(await milestoneStatus(uid), { total: 5, pending: null });
+  for (let n = 5; n < 10; n++) await createPlace(uid, `https://www.instagram.com/p/milestone${n}/`);
+  assert.deepEqual(await milestoneStatus(uid), { total: 10, pending: 10 });
+  // 古い画面から小さい節目が届いても、表示済みの最大値を下げない。
+  await markMilestoneShown(uid, 10); await markMilestoneShown(uid, 5);
+  assert.deepEqual(await milestoneStatus(uid), { total: 10, pending: null });
+});
+
+test("既存の記録から共通情報を作る移行は、本人が入力した項目だけを使い、新しい共通情報やごみ箱の記録で上書きせず、繰り返しても同じ結果になる", async () => {
+  const { backfillUrlFacts } = await import("../../src/server/places/backfill");
+  const run = randomUUID().slice(0, 8), now = Date.now();
+  const urls = { legacy: `https://backfill-${run}-a.example.com/`, newer: `https://backfill-${run}-b.example.com/`, trashed: `https://backfill-${run}-c.example.com/`, auto: `https://backfill-${run}-d.example.com/` };
+  const record = (owner: string, url: string, fields: Record<string, unknown>) =>
+    database().doc(`users/backfill-${run}-${owner}/savedPlaces/${sourceHash(url)}`).set({ url, deleted: false, note: "移さないメモ", ...fields });
+  await record("a", urls.legacy, { name: "古い入力", address: "東京都渋谷区1-1-1", genre: "kissaten", editedFields: ["name", "genre"], updatedAt: now - 2000 });
+  await record("b", urls.legacy, { name: "新しい入力", address: "", genre: null, editedFields: ["name"], updatedAt: now - 1000 });
+  await record("a", urls.newer, { name: "古い店名", editedFields: ["name"], updatedAt: now - 5000 });
+  await database().doc(`urlFacts/${sourceHash(urls.newer)}`).set({ name: "最近の店名", updatedAt: now });
+  await record("a", urls.trashed, { name: "ごみ箱の店名", editedFields: ["name"], deleted: true, updatedAt: now });
+  await record("a", urls.auto, { name: "自動入力の店名", address: "東京都渋谷区2-2-2", updatedAt: now });
+
+  const dry = await backfillUrlFacts({ apply: false });
+  assert.ok(dry.writes >= 1);
+  assert.equal((await database().doc(`urlFacts/${sourceHash(urls.legacy)}`).get()).exists, false);
+  await backfillUrlFacts({ apply: true });
+  const legacy = (await database().doc(`urlFacts/${sourceHash(urls.legacy)}`).get()).data()!;
+  // 未編集の住所は使わず、各項目は最も新しい入力を使う。旧ジャンルIDは統合後のIDにする。
+  assert.deepEqual({ ...legacy, updatedAt: undefined }, { name: "新しい入力", genre: "cafe", updatedAt: undefined });
+  assert.equal((await database().doc(`urlFacts/${sourceHash(urls.newer)}`).get()).get("name"), "最近の店名");
+  assert.equal((await database().doc(`urlFacts/${sourceHash(urls.trashed)}`).get()).exists, false);
+  assert.equal((await database().doc(`urlFacts/${sourceHash(urls.auto)}`).get()).exists, false);
+  // 2回目は対象のURLに変更がない。
+  const before = (await database().doc(`urlFacts/${sourceHash(urls.legacy)}`).get()).updateTime!;
+  await backfillUrlFacts({ apply: true });
+  assert.ok((await database().doc(`urlFacts/${sourceHash(urls.legacy)}`).get()).updateTime!.isEqual(before));
 });

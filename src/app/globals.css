@@ -403,7 +403,6 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .recommendation-privacy svg { flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
 .member-footer { display: flex; justify-content: space-between; align-items: center; padding-block: 35px; margin-top: 18px; color: #687460; font-size: 11px; }
 .member-footer button { background: transparent; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
-.member-bottom-nav { display: none; }
 .account-profile { display: flex; align-items: center; gap: 12px; padding: 18px 0 23px; border-bottom: 1px solid var(--line); }
 .account-profile > div { min-width: 0; }
 .account-profile p { margin: 0 0 5px; font-size: 15px; overflow-wrap: anywhere; font-weight: 700; }
@@ -455,7 +454,7 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
   .dialog-description { font-size: 13px; }
   .auth-footnote { font-size: 11px; }
   .member-header-inner { height: 70px; padding-inline: 20px; }
-  .member-main { padding: 23px 20px 90px; }
+  .member-main { padding: 23px 20px calc(24px + env(safe-area-inset-bottom)); }
   .home-greeting { margin-bottom: 18px; }
   .home-greeting > p { font-size: 12px; }
   .home-greeting > .private-badge { display: none; }
@@ -483,9 +482,6 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
   .home-recommendation p:not(.eyebrow) { font-size: 12px; }
   .recommendation-privacy { font-size: 11px; }
   .member-footer { flex-direction: column; align-items: flex-start; gap: 7px; margin-top: 0; padding-block: 24px 0; }
-  .member-bottom-nav { display: flex; position: fixed; z-index: 30; bottom: 0; left: 0; right: 0; justify-content: space-around; align-items: center; background: #fffffff5; backdrop-filter: blur(12px); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }
-  .member-bottom-nav a, .member-bottom-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; background: transparent; color: #6d7768; font-size: 10px; min-height: 45px; min-width: 55px; }
-  .member-bottom-nav a[aria-current] { color: var(--green); font-weight: 700; }
   .pending-draft { padding: 16px 12px; gap: 10px; }
   .pending-draft h2 { font-size: 14px; }
   .pending-draft .draft-icon { display: none; }
@@ -711,3 +707,15 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
   .area-selects { grid-template-columns: 1fr; }
   .area-settings form > button, .area-locate { width: 100%; }
 }
+
+
+/* 登録の節目を祝う、閉じられる通知 */
+.milestone-notice { position: fixed; z-index: 35; right: 24px; bottom: calc(20px + env(safe-area-inset-bottom)); width: min(400px, calc(100vw - 32px)); display: flex; align-items: flex-start; gap: 14px; padding: 22px 54px 22px 20px; border: 1px solid #d9dfba; border-radius: 18px; background: #fcf9e9; box-shadow: 0 8px 36px #18251c24; }
+.milestone-icon { display: grid; place-items: center; flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%; background: #f4e6ad; color: #7e5911; }
+.milestone-notice h2 { font-size: 18px; margin: 0 0 7px; color: #305c3e; }
+.milestone-notice p { font-size: 13px; line-height: 1.8; margin: 0; }
+.milestone-notice small { display: block; margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.milestone-notice > button { position: absolute; top: 8px; right: 8px; min-width: 44px; min-height: 44px; background: transparent; color: #53634c; display: grid; place-items: center; border-radius: 50%; }
+.milestone-notice > button:hover { background: #eee9d4; }
+.milestone-notice .milestone-error { color: #9c352f; font-size: 12px; margin-top: 8px; }
+@media (max-width: 700px) { .milestone-notice { right: 16px; bottom: calc(12px + env(safe-area-inset-bottom)); padding-block: 18px; } }

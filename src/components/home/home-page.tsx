@@ -3,12 +3,13 @@
 import { HeroImage } from "@/components/ui/hero-image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Bookmark, ChevronRight, Coffee, House, LoaderCircle, LockKeyhole, LogOut, MapPin, Plus, Sparkles, UserRound } from "lucide-react";
+import { ArrowRight, Bookmark, ChevronRight, Coffee, LoaderCircle, LockKeyhole, LogOut, MapPin, Plus } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { isProviderEnabled, providers, type ProviderId } from "@/lib/auth/providers";
 import { clearDraft, readDraft } from "@/lib/auth/draft";
 import { RecommendationsSection, RecommendationSettings } from "@/components/recommendations/recommendations-section";
+import { MilestoneNotice } from "@/components/home/milestone-notice";
 import { PlacesSection } from "@/components/places/places-section";
 
 function UserAvatar({ photoURL, initial }: { photoURL: string | null; initial: string }) {
@@ -31,8 +32,9 @@ export function HomePage() {
   const loggingOut = useRef(false);
   const [placesRevision, setPlacesRevision] = useState(0);
   const [recommendationsRevision, setRecommendationsRevision] = useState(0);
-  const onPlacesChanged = useCallback(() => setRecommendationsRevision(value => value + 1), []);
-  const onRecommendationSaved = useCallback(() => setPlacesRevision(value => value + 1), []);
+  const [milestoneRevision, setMilestoneRevision] = useState(0);
+  const onPlacesChanged = useCallback(() => { setRecommendationsRevision(value => value + 1); setMilestoneRevision(value => value + 1); }, []);
+  const onRecommendationSaved = useCallback(() => { setPlacesRevision(value => value + 1); setMilestoneRevision(value => value + 1); }, []);
 
   useEffect(() => {
     const updateGreeting = () => {
@@ -63,7 +65,7 @@ export function HomePage() {
   const user = auth.user;
   const name = user.displayName?.trim() || "あなた";
   const initial = (user.displayName?.trim() || user.email || "T").slice(0, 1).toUpperCase();
-  const photoURL = user.providerData.find((provider) => provider.providerId === "google.com")?.photoURL || user.photoURL;
+  const photoURL = user.providerData.find((provider) => provider.providerId === "google.com")?.photoURL || user.photoURL || user.providerData.find(provider => provider.photoURL)?.photoURL || null;
 
   function openAccount() { auth.clearError(); setAccountNotice(""); setUnlinkId(null); setModal("account"); }
 
@@ -86,12 +88,13 @@ export function HomePage() {
       <PlacesSection key={user.uid} draft={draft} onSaved={onSaved} revision={placesRevision} onChanged={onPlacesChanged} />
       <footer className="member-footer"><span>気になったら、ツギココ。</span><button onClick={openAccount}>アカウント設定<ArrowRight size={14} /></button></footer>
     </main>
-    <nav className="member-bottom-nav" aria-label="モバイルナビゲーション"><a href="#member-main" aria-current="page"><House size={21} /><span>ホーム</span></a><a href="#my-places"><Bookmark size={21} /><span>マイリスト</span></a><a href="#for-you"><Sparkles size={21} /><span>おすすめ</span></a><button onClick={openAccount}><UserRound size={21} /><span>アカウント</span></button></nav>
+
+    <MilestoneNotice key={`milestones-${user.uid}`} revision={milestoneRevision} />
 
     <Dialog open={modal !== null} onOpenChange={(open) => { if (!open) setModal(null); }}>
       <DialogContent>
         {modal === "account" ? <>
-          <DialogTitle className="dialog-title">アカウント</DialogTitle><DialogDescription className="dialog-description">ログイン方法を、ひとつのアカウントに。</DialogDescription>
+          <DialogTitle className="dialog-title">アカウント</DialogTitle><DialogDescription className="dialog-description">ログイン方法を、ひとつのアカウントに。追加すると、選んだサービスのアカウントと現在の登録情報を連携します。</DialogDescription>
           <div className="account-profile"><UserAvatar key={user.uid} photoURL={photoURL} initial={initial} /><div><p>{user.displayName || "ツギココユーザー"}</p><span>{user.email || "メールアドレスの提供なし"}</span></div></div>
           <h3 className="account-heading">ログイン方法</h3>
           <div className="account-providers">{providers.map((provider) => {

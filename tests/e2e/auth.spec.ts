@@ -108,8 +108,9 @@ test("自動保存の応答が失敗してもURLを残し、再試行で重複�
   expect(saves).toBe(2);
 });
 
-test("別プロバイダーの追加・解除でもユーザーIDが変わらない", async ({ page, request }, testInfo) => {
-  const email = `link-${testInfo.project.name}-${Date.now()}@example.test`;
+for (const [providerId, providerName] of [["twitter.com", "X"], ["facebook.com", "Facebook"], ["apple.com", "Apple"]] as const) {
+test(`${providerName}の追加・解除でもユーザーIDが変わらない`, async ({ page, request }, testInfo) => {
+  const email = `link-${providerId}-${testInfo.project.name}-${Date.now()}@example.test`;
   await page.goto("/login");
   await providerLogin(page, "Googleでログイン", email);
   await expect(page).toHaveURL(/\/home$/);
@@ -123,17 +124,19 @@ test("別プロバイダーの追加・解除でもユーザーIDが変わらな
   const before = (await accounts()).find((u: { email: string }) => u.email === email);
   expect(before.localId).toBeTruthy();
   await page.getByRole("button", { name: "アカウントを開く" }).click();
-  await providerLogin(page, "Facebookの連携を追加", `facebook-${email}`);
-  await expect(page.getByRole("status").filter({ hasText: "Facebookを同じアカウントに追加しました" })).toBeVisible();
+  await providerLogin(page, `${providerName}の連携を追加`, `${providerId}-${email}`);
+  await expect(page.getByRole("status").filter({ hasText: `${providerName}を同じアカウントに追加しました` })).toBeVisible();
   const after = (await accounts()).find((u: { localId: string }) => u.localId === before.localId);
-  expect(after.providerUserInfo.map((p: { providerId: string }) => p.providerId).sort()).toEqual(["facebook.com", "google.com"]);
-  await page.getByRole("button", { name: "Facebookの連携を解除" }).click();
+  expect(after.providerUserInfo.map((p: { providerId: string }) => p.providerId).sort()).toEqual([providerId, "google.com"].sort());
+  await page.getByRole("button", { name: `${providerName}の連携を解除` }).click();
   await page.getByRole("button", { name: "連携を解除する", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "連携を解除しました。" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Googleの連携を解除" })).toBeDisabled();
   const finalUser = (await accounts()).find((u: { localId: string }) => u.localId === before.localId);
   expect(finalUser.providerUserInfo.map((p: { providerId: string }) => p.providerId)).toEqual(["google.com"]);
 });
+
+}
 
 test("ログインをキャンセルしたURLは保存せず、ログイン再試行後に保存する", async ({ page }, testInfo) => {
   let saves = 0;
@@ -168,3 +171,31 @@ test("挨拶は端末の朝・昼・夜と復帰時の時刻に合わせて変�
     await expect(page.locator(".home-greeting p")).toHaveText(`${greeting}、テストユーザーさん。`);
   }
 });
+
+
+for (const [providerId, providerName] of [["twitter.com", "X"], ["facebook.com", "Facebook"], ["apple.com", "Apple"]] as const) {
+  test(`${providerName}で新規登録・再ログインして同じリストを使える`, async ({ page, request }, info) => {
+    const email = `signin-${providerId}-${info.project.name}-${Date.now()}@example.test`;
+    await page.goto("/login");
+    await providerLogin(page, `${providerName}でログイン`, email);
+    await expect(page).toHaveURL(/\/home$/);
+    await expect(page.getByRole("navigation", { name: "モバイルナビゲーション" })).toHaveCount(0);
+    const accounts = async () => (await (await request.get("http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/demo-tsugikoko/accounts:batchGet", { headers: { Authorization: "Bearer owner" } })).json()).users;
+    const before = (await accounts()).find((item: { email: string }) => item.email === email);
+    expect(before.providerUserInfo.map((item: { providerId: string }) => item.providerId)).toContain(providerId);
+    await page.getByLabel("登録するお店や投稿のURL").fill(`https://www.instagram.com/p/${before.localId}/`);
+    await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+    await expect(page.locator("#my-places article")).toHaveCount(1);
+    await page.getByRole("button", { name: "アカウントを開く" }).click();
+    await page.getByRole("button", { name: "ログアウト", exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await page.goto("/login");
+    await providerLogin(page, `${providerName}でログイン`, email);
+    await expect(page.locator("#my-places article")).toHaveCount(1);
+    const after = (await accounts()).filter((item: { email: string }) => item.email === email);
+    expect(after).toHaveLength(1);
+    expect(after[0].localId).toBe(before.localId);
+    await page.reload();
+    await expect(page.locator("#my-places article")).toHaveCount(1);
+  });
+}

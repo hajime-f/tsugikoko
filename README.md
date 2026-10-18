@@ -42,11 +42,47 @@ Google認証と店舗保存は実際のFirebaseに接続します。訪問記録
 - 初回認証はアカウント登録を兼ねます。既存ユーザーには以前と同じ方法を選ぶよう案内し、新しい方法はログイン後に`linkWithPopup`で同一UIDへ連携します。メールアドレスや表示名だけで独自に統合しません。
 - X・Facebook・Appleのログイン・連携コードは実装済みですが、各サービスの開発者アプリ設定が必要です。未設定の方法は「準備中」と表示します。
 
-### X・Facebook・Appleの有効化
+### X・Facebook・Appleの設定手順
 
-1. 各サービスで開発者アプリを用意し、コールバックURLを`https://tsugikoko.firebaseapp.com/__/auth/handler`に設定します。
-2. [Firebase Authentication](https://console.firebase.google.com/project/tsugikoko/authentication/providers)で各プロバイダーのID・シークレット等を設定して有効化します。秘密情報はリポジトリに置かないでください。
-3. 有効化できたIDのみ、`apphosting.yaml`のBUILD環境変数`NEXT_PUBLIC_AUTH_PROVIDERS`にカンマ区切りで追加し、再デプロイします（例: `google.com,facebook.com`）。Xは`twitter.com`、Appleは`apple.com`です。ローカルでは`.env.local`に指定します。
+アプリには3つの認証・既存アカウントへの連携処理があります。2026年10月19日時点では各サービスの開発者アプリが未作成で、Firebaseの本番設定もGoogleだけです。外部サービスの設定が済むまでは「準備中」と表示します。
+
+共通して使う値：
+
+| 項目 | 値 |
+| --- | --- |
+| サイトURL | `https://tsugikoko--tsugikoko.asia-east1.hosted.app` |
+| コールバック／リダイレクト／Return URL | `https://tsugikoko.firebaseapp.com/__/auth/handler` |
+| Firebaseプロジェクト | `tsugikoko` |
+| Firebase認証設定 | [Authentication → ログイン方法](https://console.firebase.google.com/project/tsugikoko/authentication/providers) |
+
+X：
+
+1. [X Developer Console](https://console.x.com/)で開発者アカウントとアプリを作成し、ユーザー認証（OAuth 1.0a）を設定します。Firebaseでは表示名が引き続き「Twitter」の場合があります。
+2. アプリのコールバックURLとサイトURLに上表の値を指定します。投稿の権限は必要ありません。
+3. API KeyとAPI Key Secretを発行し、Firebaseの「Twitter」に入力して有効化・保存します。OAuth 2.0のClient IDやBearer Tokenではありません。
+4. 開発者登録・利用プランの条件はXの申込画面で確認してください。有料契約はこの実装作業では行いません。[Firebase公式手順](https://firebase.google.com/docs/auth/web/twitter-login)
+
+Facebook：
+
+1. [Meta for Developers](https://developers.facebook.com/apps/)でアプリを作成し、Facebook LoginのWeb認証を追加します。
+2. Facebook Login設定の「有効なOAuthリダイレクトURI」に上表のコールバックURLを指定します。
+3. アプリのApp IDとApp Secretを、Firebaseの「Facebook」に入力して有効化・保存します。
+4. まずアプリの管理者・テスターで試します。一般利用者に開放する際は、Metaの管理画面が求める公開設定・プライバシーポリシー・データ削除案内等を整えます。開発モードのテスト成功だけで一般公開済みとは判断しません。[Firebase公式手順](https://firebase.google.com/docs/auth/web/facebook-login)
+
+Apple：
+
+1. [Apple Developer](https://developer.apple.com/account/)にログインします。Sign in with Appleの設定にはApple Developer Programへの参加が必要です。未加入なら、加入条件・費用を確認してから本人が手続きします。
+2. Certificates, Identifiers & ProfilesでSign in with Appleを有効にしたApp IDを用意し、Web用のServices IDを登録して、そのApp IDに関連付けます。
+3. Web設定のドメインに`tsugikoko.firebaseapp.com`、Return URLに上表のコールバックURLを指定します。Services IDはFirebaseへ入力するため控えます。
+4. Sign in with Apple用の秘密鍵を作成し、Key IDと`.p8`ファイルを安全に保管します。Team IDも控えます。
+5. Firebaseの「Apple」にServices ID、Team ID、Key ID、秘密鍵を入力して有効化・保存します。[Firebase公式手順](https://firebase.google.com/docs/auth/web/apple)、[AppleのWeb設定手順](https://developer.apple.com/help/account/capabilities/configure-sign-in-with-apple-for-the-web/)
+
+最後にツギココ側を有効化：
+
+1. 設定が終わったサービス名を知らせてください。鍵やシークレットをチャット・Git・`NEXT_PUBLIC_*`変数へ貼り付ける必要はありません。
+2. 実装担当はFirebase側の有効状態を確認し、`apphosting.yaml`の`NEXT_PUBLIC_AUTH_PROVIDERS`へ設定済みIDだけを追加してデプロイします。例：`google.com,twitter.com,facebook.com,apple.com`。一部だけ完了なら、その方法だけ追加できます。ローカルは`.env.local`へ同じ値を設定します。
+3. 本番の別ブラウザでログイン・再読込・ログアウトを確認します。Googleで登録済みの人は、Googleでログインして「アカウント」から追加すると、同じ保存リストを使えます。各方法のメールアドレスが異なる場合に、同一人物を自動推測して統合することはありません。
+4. Firebaseの「承認済みドメイン」に本番ホストがあることも確認します。SNS内ブラウザでポップアップが開けない場合はSafariやChromeで開き直します。
 
 `/home`の表示制御に加え、店舗APIはFirebase Admin SDKでIDトークンと失効を検証します。所有者はトークンのUIDから決定し、入力からは受け取りません。Firestore Rulesでクライアントからの直接アクセスを拒否し、個人データは認証済みAPIだけで扱います。応答は`private, no-store`です。
 
@@ -74,7 +110,7 @@ E2Eテストはインストール済みのGoogle Chromeを使い、本番ビル�
 - `GET /api/places` の追加パラメーターは `q`（100文字以内）、`genre`（`all`／`unset`／ジャンルID）、`sort`（`newest`／`name`）です。店名順は日本語の照合順で、ふりがな順ではありません。未入力の店名は末尾、同名は登録日時とIDで順序を固定します。
 - 試作の検索・ジャンル絞り込み・店名順は、リクエストごとに本人の通常記録またはごみ箱を全件読み、サーバーで絞り込みます。300件保存していれば1ページの取得でも300件分を読みます。追加の検索サービスは使いません。読み取りを抑えるため、条件が有効な間は定期ポーリングと画面復帰時の自動更新を止め、検索ボタンの再実行・編集後などで更新します。通常一覧は従来どおり30件単位です。利用増加時には検索用インデックスやキャッシュを検討します。
 - 店舗カードの上部には、判定できた料理ジャンルに対応する共通のイメージ写真を表示します。ジャンルが不明な場合は、店舗IDごとに固定した4色の淡い背景と装飾アイコンを表示します。不明ジャンルの装飾はCSS・SVGで描画します。一覧の見出し・検索欄・絞り込み・タブ・追加操作は固定せず、ページと一緒にスクロールします。装飾の色・アイコンは店舗のジャンルや評価を表しません。
-- `users/{uid}/savedPlaces`に本人の記録、`places`に確認済みの共通店舗情報、`placeSources`に取得元と1日分の再利用情報を分けます。本人の追記は共通情報へ反映しません。
+- `users/{uid}/savedPlaces`に本人の記録、`places`に確認済みの共通店舗情報、`placeSources`に取得元と1日分の再利用情報を分けます。本人が入力した店名・住所・ジャンルは、`urlFacts`に必要項目だけを保存し、同じ正規化URLを別ユーザーが登録したときの入力補助に再利用します。メモ・訪問・星評価・UID・追加のURLは再利用しません。
 - 同じURLは追跡パラメータを除いて正規化し、トランザクションで重複登録を防ぎます。食べログの口コミ・写真ページ、一休のプランページ、XやInstagramの共有URLも店舗・投稿単位に揃えます。異なる取得元の共通店舗照合は、自動入力できた店名と住所の完全一致を使い、名前だけで支店を統合しません。
 - 保存・編集・再取得の合計は、試作時は1ユーザーあたり20回/分・200回/日。再取得は1分間隔、通常の取得結果は1日再利用します。本人による「再取得」では10分より古い結果を使わず元ページを読み直します。取得方式のバージョンが変わった場合は古いキャッシュを使いません。
 - URLを先に保存し、本番ではCloud Tasksのジョブで取得を継続します。外部取得は8秒・1.5MBまでとし、リダイレクトを追いません。中断した処理はFirestoreの状態を基に一覧再表示時に最大3回まで再開します。Cloud Tasks無効時は90秒の処理リースが切れれば再開でき、ジョブ登録日時には左右されません。登録から10分間のジョブ再登録待ちはCloud Tasks有効時だけ適用します。
@@ -211,3 +247,21 @@ E2E_BASE_URL=https://tsugikoko--tsugikoko.asia-east1.hosted.app npm run test:e2e
 - 保存先は `users/{uid}/preferences/area`。地域コードと更新日時だけを保持し、精密な座標や位置の履歴は保存しません。APIは `GET/PATCH /api/preferences/area`、認証必須。全国へ戻すと設定ドキュメントを削除します。
 - 共通店舗の住所を地域に照合して推薦を絞ります。地域指定時に住所を判定できない店舗は除外し、候補不足なら利用者が都道府県全域・全国へ広げられます。自動では広げません。地域変更時に本人の推薦キャッシュを更新し、以前の地域のカーソルを使い回しません。
 - 市区町村データは[国土地理院 muni.js](https://maps.gsi.go.jp/js/muni.js)（2026-10-18取得、1,919件）を加工し、`src/lib/areas/municipalities.json` に同梱しています。先頭ゼロを補い、市と区の間の空白を除去しています。[国土地理院コンテンツ利用規約](https://www.gsi.go.jp/kikakuchousei/kikakuchousei40182.html)に従い画面にも出典を表示します。行政区の変更時はこの一覧を更新します。
+
+
+## 同じURLの入力補助と登録のお祝い
+
+同じ正規化URLを別ユーザーが登録すると、`urlFacts/{URLのSHA-256}`の店名・住所・ジャンルを初期値に使います。編集で実際に変更した空でない項目だけを蓄積します。メモ・訪問・星評価・UID・他のURLはコピーせず、他ユーザーの既存記録も変更しません。除外サイトに外部アクセスする処理はありません。手入力による入力補助と、JSON-LDで検証済みの推薦対象の共通店舗は別管理です。
+
+`GET /api/milestones`は本人のごみ箱以外の保存件数と未表示の最大閾値を返します。5・10・20・50・100件、以後100件ごとにお祝いを表示し、閉じる操作で`POST /api/milestones`へ閾値を送ります。`users/{uid}/milestones/state`に閉じた最大閾値を残し、再読み込みや重複保存で同じ段階を繰り返しません。件数はFirestoreのcount集計を使い、ページ送りや検索件数に依存しません。
+
+既存データの入力補助への移行（管理者用）：
+
+```sh
+# 既定はdry-run。プロジェクトtsugikokoのADC認証が必要。
+node --conditions=react-server --import tsx scripts/backfill-url-facts.mts
+# dry-runで対象件数・上限を確認後に適用
+node --conditions=react-server --import tsx scripts/backfill-url-facts.mts --apply --max-records=20000 --max-writes=1000
+```
+
+スクリプトは対象の保存記録を読むだけで、書くのは`urlFacts`だけです。ログは件数のみです。`truncated`がtrueの場合は全件を調べられていないため、上限を見直してから実行します。既存の共通情報が新しければ保持し、同じ内容の再実行では書き込みません。

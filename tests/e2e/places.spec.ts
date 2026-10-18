@@ -27,6 +27,7 @@ function listFixtures(count: number): SavedPlace[] {
 
 // このスイートは店舗/認証を検証する。推薦の集計と表示は recommendations.spec.ts で検証する。
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/milestones", route => route.fulfill({ json: { total: 0, pending: null } }));
   await page.route(/\/api\/recommendations(?:\?|$)/, route => route.fulfill({ json: { items: [], nextCursor: null, generatedAt: null, mode: "insufficient" } }));
 });
 
@@ -136,6 +137,7 @@ test("スクロールで続きを読み込み、失敗の再試行と自動更�
   await expect(page.getByRole("article")).toHaveCount(30);
   expect(cursors).toEqual([0]);
   await expect(page.locator(".member-header").getByRole("navigation")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "モバイルナビゲーション" })).toHaveCount(0);
   await expect(page.locator(".member-header").getByRole("button", { name: "アカウントを開く" })).toBeVisible();
   await page.getByRole("button", { name: "もっと見る", exact: true }).scrollIntoViewIfNeeded();
   const retry = page.getByRole("button", { name: "続きを再読み込み", exact: true });
@@ -497,4 +499,83 @@ test("ジャンルごとの軽量画像を遅延読み込みし、不明な店�
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("article").first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath("genre-cards.png"), animations: "disabled" });
+});
+
+
+test("別ユーザーが同じURLを登録すると店舗の基本情報だけを再利用する", async ({ page }, info) => {
+  const suffix = `${info.project.name}-${Date.now()}`;
+  const source = `https://www.instagram.com/p/shared-${suffix}/`;
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `share-a-${suffix}@example.test`);
+  await page.getByLabel("登録するお店や投稿のURL").fill(source);
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  const card = page.locator("#my-places article");
+  await card.getByRole("button", { name: "編集", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("同じURLを保存する人の入力補助にも使います");
+  await dialog.getByLabel("店名", { exact: true }).fill("共有のカフェ");
+  await dialog.getByLabel("住所", { exact: true }).fill("東京都渋谷区神南1-2-3");
+  await dialog.getByLabel("ジャンル", { exact: true }).selectOption("cafe");
+  await dialog.getByLabel("自分用メモ").fill("私だけの秘密のメモ");
+  await dialog.getByRole("button", { name: "変更を保存" }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("button", { name: "アカウントを開く" }).click();
+  await page.getByRole("button", { name: "ログアウト", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `share-b-${suffix}@example.test`);
+  await page.getByLabel("登録するお店や投稿のURL").fill(`${source}?utm_source=shared`);
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  await expect(card).toContainText("共有のカフェ");
+  await expect(card).toContainText("東京都渋谷区神南1-2-3");
+  await expect(card).toContainText("カフェ・喫茶店");
+  await expect(card).not.toContainText("私だけの秘密のメモ");
+  await card.getByRole("button", { name: "編集", exact: true }).click();
+  await expect(dialog.getByLabel("自分用メモ")).toHaveValue("");
+  await dialog.getByRole("button", { name: "閉じる", exact: true }).click();
+  await page.reload();
+  await expect(card).toContainText("共有のカフェ");
+});
+
+test("5件の登録を祝い、閉じた節目は再読込と重複保存でも再表示しない", async ({ page }, info) => {
+  await page.unroute("**/api/milestones");
+  const suffix = `${info.project.name}-${Date.now()}`;
+  const email = `milestone-${suffix}@example.test`;
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", email);
+  await expect(page.getByRole("heading", { name: "あなたのマイリスト" })).toBeVisible();
+  const database = db();
+  const { uid } = await getAuth(getApps()[0]).getUserByEmail(email);
+  const batch = database.batch();
+  for (const place of listFixtures(4)) batch.set(database.doc(`users/${uid}/savedPlaces/${place.id}`), place);
+  await batch.commit();
+  await page.reload();
+  const notice = page.getByRole("complementary", { name: "お店登録のお祝い" });
+  await expect(page.locator("#my-places article")).toHaveCount(4);
+  await expect(notice).toHaveCount(0);
+  const source = `https://www.instagram.com/p/milestone-${suffix}/`;
+  await page.getByLabel("登録するお店や投稿のURL").fill(source);
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  await expect(notice).toContainText("お店の登録が5件に達しました。");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath("milestone.png"), animations: "disabled" });
+  await notice.getByRole("button", { name: "お祝いを閉じる" }).click();
+  await expect(notice).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("#my-places article")).toHaveCount(5);
+  await expect(notice).toHaveCount(0);
+  await page.getByLabel("登録するお店や投稿のURL").fill(source);
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  await expect(page.getByText("このURLは登録済みです。保存済みのお店をご確認ください。", { exact: true })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  // 途中の節目を連続表示せず、最大の20件だけを表示する。
+  const more = database.batch();
+  for (const place of listFixtures(20).slice(4)) more.set(database.doc(`users/${uid}/savedPlaces/${place.id}`), place);
+  await more.commit();
+  await page.reload();
+  await expect(notice).toContainText("お店の登録が20件に達しました。");
+  await expect(notice).toContainText("素晴らしいです！");
+  await notice.getByRole("button", { name: "お祝いを閉じる" }).click();
+  await expect(notice).toHaveCount(0);
+  expect((await database.doc(`users/${uid}/milestones/state`).get()).get("shownThreshold")).toBe(20);
 });

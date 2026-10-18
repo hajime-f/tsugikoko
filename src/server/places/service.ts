@@ -13,6 +13,8 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 const records = (uid: string) => database().collection("users").doc(uid).collection("savedPlaces");
 const urlKeys = (uid: string) => database().collection("users").doc(uid).collection("urlKeys");
 const placeKeys = (uid: string) => database().collection("users").doc(uid).collection("placeKeys");
+// 同じURLを保存する人の入力補助に使う、店名・住所・ジャンルだけの共通情報。UID・メモ・訪問記録は持たない。
+const urlFacts = (url: string) => database().doc(`urlFacts/${hash(url)}`);
 const expired = (place: SavedPlace) => place.deleted && (place.deleteAt ?? 0) <= Date.now();
 const CACHE_MS = 86_400_000, REFRESH_CACHE_MS = 10 * 60_000;
 const LEASE_MS = 90_000, REDISPATCH_MS = 10 * 60_000;
@@ -53,7 +55,7 @@ export async function createPlace(uid: string, url: string) {
   const key = urlKeys(uid).doc(hash(url));
   const supported = Boolean(extractionTarget(url));
   return database().runTransaction(async (tx) => {
-    const mapping = await tx.get(key);
+    const [mapping, shared] = await Promise.all([tx.get(key), tx.get(urlFacts(url))]);
     const id = mapping.data()?.id || hash(url);
     const ref = records(uid).doc(id);
     const existing = await tx.get(ref);
@@ -71,11 +73,23 @@ export async function createPlace(uid: string, url: string) {
       extraction: supported ? "pending" : "needs_review", reason: supported ? null : "unsupported",
       sourceLabel: sourceLabel(url), fetchedAt: null, createdAt: now, updatedAt: now, lastAttemptAt: null,
       deleted: false, deleteAt: null, visibility: "private", visitCount: 0, latestVisit: null, genre: null,
+      // 同じURLの共通情報を初期値にする。本人の編集としては扱わないので、検証済みの自動入力があればそちらで上書きする。
+      ...sharedFacts(shared),
     };
     tx.set(ref, { ...place, attempts: 0, purgeAt: null });
     tx.set(key, { id });
     return { place, duplicate: false, restored: false };
   });
+}
+
+function sharedFacts(doc: FirebaseFirestore.DocumentSnapshot): Partial<Pick<SavedPlace, "name" | "address" | "genre">> {
+  if (!doc.exists) return {};
+  const name = doc.get("name"), address = doc.get("address"), genre = normalizeGenre(doc.get("genre"));
+  return {
+    ...(typeof name === "string" && name ? { name } : {}),
+    ...(typeof address === "string" && address ? { address } : {}),
+    ...(genre ? { genre } : {}),
+  };
 }
 
 // おすすめからの保存。表示内容はサーバーが共通店舗から解決した情報だけを使い、クライアントの入力は信用しない。
@@ -236,6 +250,14 @@ export async function updatePlace(uid: string, id: string, changes: { name: stri
       patch = { ...patch, ...fields, customDetails: true };
       if (genre !== undefined) { patch.genre = genre; editedFields.add("genre"); }
       patch.editedFields = [...editedFields];
+      // 今回の編集で実際に変えた、空でない店名・住所・ジャンルだけを同じURLの共通情報へ反映する。
+      // 自動入力や共有で受け取ったままの値・メモ・「未設定」は再投稿しない（他人の新しい入力を巻き戻さない）。
+      const facts = {
+        ...(changes.name && changes.name !== place.name ? { name: changes.name } : {}),
+        ...(changes.address && changes.address !== place.address ? { address: changes.address } : {}),
+        ...(genre && genre !== place.genre ? { genre } : {}),
+      };
+      if (Object.keys(facts).length) tx.set(urlFacts(place.url), { ...facts, updatedAt: now }, { merge: true });
     }
     tx.update(ref, patch);
     return publicRecord(id, { ...place, ...patch });
@@ -340,7 +362,8 @@ export async function processExtraction(uid: string, id: string, options: { forc
         name: edited.includes("name") ? current.get("name") : facts.name,
         address: edited.includes("address") ? current.get("address") : facts.address,
         placeId, extraction: "ready", reason: null, refresh: false, fetchedAt, updatedAt: Date.now(),
-        genre: edited.includes("genre") ? normalizeGenre(current.get("genre")) : facts.genre,
+        // ページからジャンルが分からない場合は、同じURLの共通情報で入れた初期値を残す。
+        genre: edited.includes("genre") ? normalizeGenre(current.get("genre")) : facts.genre ?? normalizeGenre(current.get("genre")),
       });
       if (!otherActive) tx.set(keyRef, { id });
     });

@@ -18,6 +18,9 @@ test("本人・他人・未ログインのいずれもFirestoreを直接読み�
       await assertFails(getDoc(doc(db, "users/owner/recommendations/current")));
       await assertFails(setDoc(doc(db, "users/owner/recommendationDismissed/common"), { createdAt: 0 }));
       await assertFails(getDoc(doc(db, "users/owner/preferences/area")));
+      await assertFails(getDoc(doc(db, "urlFacts/common")));
+      await assertFails(setDoc(doc(db, "urlFacts/common"), { name: "偽の店名" }));
+      await assertFails(setDoc(doc(db, "users/owner/milestones/state"), { shownThreshold: 1000 }));
       await assertFails(setDoc(doc(db, "users/owner/preferences/area"), { prefectureCode: "13", municipalityCode: null }));
     }
   } finally { await env.cleanup(); }

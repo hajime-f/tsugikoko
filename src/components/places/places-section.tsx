@@ -202,7 +202,8 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
         <button className="button button-dark" disabled={busy || !url.trim()} type="submit">{busy ? <LoaderCircle size={18} className="spinning" /> : <Plus size={18} />}行きたいに保存</button>
       </form>
       <p id="register-help" className="register-help"><LockKeyhole size={13} />保存した記録は、あなたにだけ表示されます。</p>
-      <p className="register-support">対応ページは店名・住所を自動で取得。未対応のサイトやSNSも、URLをそのまま保存できます。</p>
+      <p className="register-support">店名・住所・ジャンルは、同じURLを保存する人の入力補助にも利用します。メモ・訪問記録・評価は非公開です。</p>
+      <p className="register-support">同じURLの店舗情報があれば入力を補助します。対応ページでは店名・住所を自動で取得します。</p>
       <p className="places-message" role="status">{message}</p>
       {error && <div className="places-error" role="alert">{error}{saveFailed && <p>URLは入力欄に残しています。</p>}<button type="button" className="text-button" disabled={loading || busy} onClick={() => { if (saveFailed) void registerUrl(url); else void reload(); }}>{saveFailed ? "保存を再試行" : "一覧を再読み込み"}</button></div>}
     </section>
@@ -268,7 +269,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
     <Dialog open={Boolean(modal)} onOpenChange={(open) => { if (!open && !busy) setModal(null); }}>
       <DialogContent>
         <DialogTitle className="dialog-title">{modal?.mode === "edit" ? "お店の情報を編集" : "ごみ箱へ移しますか？"}</DialogTitle>
-        <DialogDescription className="dialog-description">{modal?.mode === "edit" ? "すべて任意です。追記した内容は、自動取得で上書きされません。" : "30日間は元に戻せます。期間を過ぎると、この保存記録は削除されます。"}</DialogDescription>
+        <DialogDescription className="dialog-description">{modal?.mode === "edit" ? "すべて任意です。店名・住所・ジャンルは、同じURLを保存する人の入力補助にも使います。自分用メモは共有しません。本人の編集は自動取得で上書きされません。" : "30日間は元に戻せます。期間を過ぎると、この保存記録は削除されます。"}</DialogDescription>
         {modal?.mode === "edit" ? <form className="place-edit-form" onSubmit={(event) => { event.preventDefault(); void perform(async () => {
           // ジャンルを操作しなかった場合、未取得の値を本人の指定として固定しない。
           const { genre, ...details } = fields;

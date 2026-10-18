@@ -1203,14 +1203,79 @@
       "height": 245,
       "avifBytes": 9721,
       "webpBytes": 14094
-    }
-  ],
-  "reused": [
+    },
     {
       "id": "cafe",
       "source": "User-provided photograph",
-      "output": "public/images/landing/coffee-provided.{avif,webp}",
-      "notes": "Existing supplied photo retained; not generated."
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/カフェ.jpg",
+      "sourceSha256": "21ed84dc3408b153e76e153ca9d4270068c039df22052f4deb9c1bb8336b81fd",
+      "sourceWidth": 508,
+      "sourceHeight": 340,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/cafe-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 100,
+        "width": 508,
+        "height": 203
+      },
+      "width": 508,
+      "height": 203,
+      "avifBytes": 11436,
+      "webpBytes": 16672
+    },
+    {
+      "id": "churrasco",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/シュラスコ.jpg",
+      "sourceSha256": "8d2585b10bcc0918fa267a79f017599608c090ae9e249d569fb53b74d222fa1c",
+      "sourceWidth": 540,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/churrasco-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 72,
+        "width": 540,
+        "height": 216
+      },
+      "width": 540,
+      "height": 216,
+      "avifBytes": 11733,
+      "webpBytes": 17028
+    },
+    {
+      "id": "pizza",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/ピザ.jpg",
+      "sourceSha256": "5260c840342618e089f85e22f0bef65451da9fa6537313f01c794cdf438a7f87",
+      "sourceWidth": 540,
+      "sourceHeight": 360,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/pizza-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 72,
+        "width": 540,
+        "height": 216
+      },
+      "width": 540,
+      "height": 216,
+      "avifBytes": 16394,
+      "webpBytes": 24584
     }
-  ]
+  ],
+  "reused": []
 }

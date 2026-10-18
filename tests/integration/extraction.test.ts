@@ -233,10 +233,13 @@ test("本人が選んだジャンルと未設定は、自動判定・店名か�
 test("追加したジャンルを保存・読み出しでき、JSON-LDの料理分類からも細かい分類で判定する", async () => {
   const uid = `genre-new-${randomUUID()}`;
   const { place } = await createPlace(uid, "https://tabelog.com/tokyo/A1303/A130302/13000099/");
-  for (const genre of ["gyoza", "beer_garden", "soup_curry", "donburi", "kissaten", "indian_curry", "hamburger", "takoyaki", "onigiri", "bento_deli", "udon", "bar"] as const) {
+  for (const genre of ["gyoza", "beer_garden", "soup_curry", "donburi", "kissaten", "indian_curry", "hamburger", "takoyaki", "onigiri", "bento_deli", "udon", "bar", "pizza", "churrasco"] as const) {
     assert.equal((await updatePlace(uid, place.id, { name: "店", address: "", note: "", genre })).genre, genre);
     assert.equal((await listPlaces(uid, false, null)).places[0].genre, genre);
   }
+  // 追加したジャンルでも絞り込める。
+  assert.deepEqual((await listPlaces(uid, false, null, "all", { q: "", genre: "churrasco", sort: "newest" })).places.map(item => item.id), [place.id]);
+  assert.deepEqual((await listPlaces(uid, false, null, "all", { q: "", genre: "pizza", sort: "newest" })).places, []);
   const url = "https://soup-curry.example.com/shop";
   await database().doc(`placeSources/${sourceHash(url)}`).delete();
   const html = '<script type="application/ld+json">{"@type":"Restaurant","name":"こはる","address":"北海道札幌市中央区南1条西1-2-3","servesCuisine":"スープカレー"}</script>';

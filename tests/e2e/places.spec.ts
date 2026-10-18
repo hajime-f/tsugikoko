@@ -252,6 +252,22 @@ test("URL登録・重複防止・編集・再ログイン・ごみ箱を通し�
   await page.getByRole("button", { name: "変更を保存", exact: true }).click();
   expect((await unchangedRequest).postDataJSON()).not.toHaveProperty("genre");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  // 追加ジャンルとカフェの差し替え画像を、実APIの保存・絞り込み・再表示まで確認する。
+  for (const [id, label] of [["pizza", "ピザ"], ["churrasco", "シュラスコ"], ["cafe", "カフェ"]]) {
+    await edited.getByRole("button", { name: "編集", exact: true }).click();
+    await genreSelect.selectOption({ label });
+    await page.getByRole("button", { name: "変更を保存", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(edited.locator(".saved-place-top")).toHaveAttribute("data-genre", id);
+    const photo = edited.getByRole("img", { name: `${label}のイメージ写真（実店舗の写真ではありません）`, exact: true });
+    await expect(photo).toHaveAttribute("src", `/images/genres/${id}-provided.webp`);
+    await expect.poll(() => photo.evaluate((image: HTMLImageElement, genreId) => image.complete && image.naturalWidth > 0 && image.currentSrc.endsWith(`/${genreId}-provided.avif`), id)).toBe(true);
+    await page.locator("#place-genre-filter").selectOption(id);
+    await expect(edited).toBeVisible();
+    await edited.screenshot({ path: info.outputPath(`genre-${id}.png`), animations: "disabled" });
+    await page.reload();
+    await expect(edited.locator(".saved-place-top")).toHaveAttribute("data-genre", id);
+  }
   await edited.getByRole("button", { name: "編集", exact: true }).click();
   await genreSelect.selectOption("");
   await page.getByRole("button", { name: "変更を保存", exact: true }).click();

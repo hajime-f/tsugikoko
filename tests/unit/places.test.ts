@@ -68,6 +68,9 @@ test("対応ジャンルの名称から画像を選び、曖昧な店名や焼�
     ["スペイン料理", "spanish"], ["しゃぶしゃぶ", "shabushabu"], ["すき焼き", "sukiyaki"], ["もつ鍋", "hotpot"], ["土鍋ご飯", null],
     ["ブッフェ", "buffet"], ["スイーツビュッフェ", "sweets_buffet"], ["海鮮料理", "seafood"], ["割烹", "kappo"], ["京料理", "kyoto"],
     ["韓国料理", "korean"], ["ベトナム料理", "vietnamese"], ["ステーキ", "steak"], ["パスタ", "pasta"],
+    ["ピザ", "pizza"], ["ピッツァ ナポリ", "pizza"], ["Pizzeria Koharu", "pizza"], ["ピッツェリア こはる", "pizza"], ["koharu pizza", "pizza"],
+    ["シュラスコ", "churrasco"], ["Churrascaria Koharu", "churrasco"], ["churrasco", "churrasco"],
+    ["イタリアン", "italian"], ["イタリア料理", "italian"], ["カフェ", "cafe"],
   ] as const) assert.equal(genreFromText(text), genre, text);
   assert.equal(genreFromText("こはる"), null);
   assert.equal(isGenre("toString"), false);

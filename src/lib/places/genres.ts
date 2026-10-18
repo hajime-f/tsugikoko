@@ -10,7 +10,7 @@ export const genres = {
   ramen: { label: "ラーメン", image: "/images/genres/ramen-provided" },
   curry: { label: "カレー", image: "/images/genres/curry-provided" },
   soba: { label: "そば", image: "/images/genres/soba-provided" },
-  cafe: { label: "カフェ", image: "/images/landing/coffee-provided" },
+  cafe: { label: "カフェ", image: "/images/genres/cafe-provided" },
   bakery: { label: "ベーカリー", image: "/images/genres/bakery-provided" },
   unagi: { label: "うなぎ", image: "/images/genres/unagi-provided" },
   okonomiyaki: { label: "お好み焼き", image: "/images/genres/okonomiyaki-provided" },
@@ -21,6 +21,8 @@ export const genres = {
   yoshoku: { label: "洋食", image: "/images/genres/yoshoku-provided" },
   teppanyaki: { label: "鉄板焼き", image: "/images/genres/teppanyaki-provided" },
   spanish: { label: "スペイン料理", image: "/images/genres/spanish-provided" },
+  pizza: { label: "ピザ", image: "/images/genres/pizza-provided" },
+  churrasco: { label: "シュラスコ", image: "/images/genres/churrasco-provided" },
   pasta: { label: "パスタ", image: "/images/genres/pasta-provided" },
   steak: { label: "ステーキ", image: "/images/genres/steak-provided" },
   grill: { label: "グリル", image: "/images/genres/grill-provided" },
@@ -57,12 +59,12 @@ export function isGenre(value: unknown): value is Genre { return typeof value ==
 
 // 一休のトップ「料理ジャンルから探す」にある分類と、既存の保存値を扱う。
 // https://restaurant.ikyu.com/ / https://restaurant.ikyu.com/keyword/genre/
-// 確認日: 2026-10-18。ユーザー提供画像に対応する12分類も追加。
+// 確認日: 2026-10-18。ユーザー提供画像に対応する分類も追加。
 export const genreGroups = [
   { label: "和食", options: ["japanese", "sushi", "kaiseki", "kappo", "kyoto", "seafood", "tempura", "soba", "sukiyaki", "shabushabu", "yakitori", "hotpot", "unagi", "okonomiyaki", "teppanyaki", "ramen", "udon", "donburi", "takoyaki", "onigiri", "bento_deli"] },
-  { label: "洋食", options: ["yoshoku", "italian", "french", "spanish", "pasta", "steak", "grill", "curry", "soup_curry", "hamburger"] },
+  { label: "洋食", options: ["yoshoku", "italian", "french", "spanish", "pasta", "pizza", "steak", "grill", "curry", "soup_curry", "hamburger"] },
   { label: "中華", options: ["chinese", "dim_sum", "gyoza"] },
-  { label: "焼肉・エスニック", options: ["yakiniku", "ethnic", "korean", "thai", "vietnamese", "indian_curry"] },
+  { label: "焼肉・エスニック", options: ["yakiniku", "churrasco", "ethnic", "korean", "thai", "vietnamese", "indian_curry"] },
   { label: "居酒屋・バー", options: ["izakaya", "meat_bar", "wine_bar", "bar", "beer_garden"] },
   { label: "カフェ・ブッフェ", options: ["cafe", "kissaten", "bakery", "afternoon_tea", "buffet", "sweets_buffet"] },
 ] as const satisfies readonly { label: string; options: readonly Genre[] }[];
@@ -72,6 +74,7 @@ export const genreGroups = [
 const patterns: [Genre, RegExp][] = [
   ["sushi", /寿司|鮨|すし|\bsushi\b/i],
   ["yakiniku", /焼肉|焼き肉|\byakiniku\b|korean barbecue/i],
+  ["churrasco", /シュラスコ|\bchurrasc(?:o|aria)\b/i],
   ["yakitori", /焼鳥|焼き鳥|やきとり|\byakitori\b/i],
   ["unagi", /うなぎ|ウナギ|鰻|うな[丼重]|\bunagi\b/i],
   ["shabushabu", /しゃぶしゃぶ|\bshabu[\s-]?shabu\b/i],
@@ -91,8 +94,9 @@ const patterns: [Genre, RegExp][] = [
   ["dim_sum", /飲茶|点心|小籠包|\bdim\s*sum\b/i],
   ["gyoza", /餃子|ギョーザ|ぎょうざ|\bgyoza\b/i],
   ["chinese", /中華|中国料理|広東料理|四川料理|\bchinese\b/i],
+  ["pizza", /ピザ|ピッツァ|ピッツェリア|\bpizza|\bpizzeria\b/i],
   ["pasta", /パスタ|スパゲッティ|\bpasta\b/i],
-  ["italian", /イタリア|ピッツェリア|\bitalian\b|\bpizzeria\b/i],
+  ["italian", /イタリア|\bitalian\b/i],
   ["spanish", /スペイン|パエリア|\bspanish\b|\btapas\b/i],
   ["french", /フレンチ|フランス料理|\bfrench\b/i],
   ["steak", /ステーキ|\bsteak/i],

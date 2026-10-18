@@ -14,6 +14,9 @@ test("本人・他人・未ログインのいずれもFirestoreを直接読み�
       await assertFails(setDoc(doc(db, "users/owner/savedPlaces/two"), { visibility: "public" }));
       await assertFails(getDoc(doc(db, "places/common")));
       await assertFails(setDoc(doc(db, "placeSources/source"), { name: "偽の共通店舗" }));
+      await assertFails(getDoc(doc(db, "recommendationModel/current")));
+      await assertFails(getDoc(doc(db, "users/owner/recommendations/current")));
+      await assertFails(setDoc(doc(db, "users/owner/recommendationDismissed/common"), { createdAt: 0 }));
     }
   } finally { await env.cleanup(); }
 });

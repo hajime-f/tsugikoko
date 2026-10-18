@@ -6,7 +6,7 @@ const localUrl = authEmulator ? "http://127.0.0.1:3101" : "http://127.0.0.1:3100
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: authEmulator ? ["auth.spec.ts", "places.spec.ts"] : "landing.spec.ts",
+  testMatch: authEmulator ? ["auth.spec.ts", "places.spec.ts", "recommendations.spec.ts"] : "landing.spec.ts",
   timeout: 45_000,
   fullyParallel: true,
   workers: 2,

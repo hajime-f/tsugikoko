@@ -8,6 +8,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { isProviderEnabled, providers, type ProviderId } from "@/lib/auth/providers";
 import { clearDraft, readDraft } from "@/lib/auth/draft";
+import { RecommendationsSection, RecommendationSettings } from "@/components/recommendations/recommendations-section";
 import { PlacesSection } from "@/components/places/places-section";
 
 function UserAvatar({ photoURL, initial }: { photoURL: string | null; initial: string }) {
@@ -22,11 +23,15 @@ function UserAvatar({ photoURL, initial }: { photoURL: string | null; initial: s
 export function HomePage() {
   const auth = useAuth();
   const router = useRouter();
-  const [modal, setModal] = useState<"account" | "guide" | null>(null);
+  const [modal, setModal] = useState<"account" | "guide" | "recommendations" | null>(null);
   const [unlinkId, setUnlinkId] = useState<ProviderId | null>(null);
   const [pendingDraft, setPendingDraft] = useState<{ uid: string; url: string } | null>(null);
   const [accountNotice, setAccountNotice] = useState("");
   const loggingOut = useRef(false);
+  const [placesRevision, setPlacesRevision] = useState(0);
+  const [recommendationsRevision, setRecommendationsRevision] = useState(0);
+  const onPlacesChanged = useCallback(() => setRecommendationsRevision(value => value + 1), []);
+  const onRecommendationSaved = useCallback(() => setPlacesRevision(value => value + 1), []);
 
   useEffect(() => {
     if (!auth.loading && !auth.user) router.replace(loggingOut.current ? "/" : "/login");
@@ -63,9 +68,9 @@ export function HomePage() {
         <div className="member-hero-photo"><HeroImage /><span className="member-photo-note"><Coffee size={16} />次の週末、どこに行こう。</span></div>
       </section>
 
-      <PlacesSection key={user.uid} draft={draft} onSaved={onSaved} />
+      <PlacesSection key={user.uid} draft={draft} onSaved={onSaved} revision={placesRevision} onChanged={onPlacesChanged} />
 
-      <section className="home-recommendation" id="for-you" aria-labelledby="for-you-title"><div className="recommendation-art" aria-hidden="true"><Bookmark size={24} /><span /><Sparkles size={34} /><span /><MapPin size={24} /></div><div><p className="eyebrow section-eyebrow">A LITTLE MORE YOU.</p><h2 id="for-you-title">あなたらしい一軒を、ここに。</h2><p>好みの近い人の「好き」から、新しいお店との出会いを。<br />あなたへのおすすめ機能は、ただいま準備中です。</p><span className="recommendation-privacy"><LockKeyhole size={13} />個人の非公開の記録が、ほかの人に見えることはありません。</span></div></section>
+      <RecommendationsSection key={`recommendations-${user.uid}`} revision={recommendationsRevision} onSaved={onRecommendationSaved} onSettings={() => setModal("recommendations")} />
       <footer className="member-footer"><span>気になったら、ツギココ。</span><button onClick={openAccount}>アカウント設定<ArrowRight size={14} /></button></footer>
     </main>
     <nav className="member-bottom-nav" aria-label="モバイルナビゲーション"><a href="#member-main" aria-current="page"><House size={21} /><span>ホーム</span></a><a href="#my-places"><Bookmark size={21} /><span>マイリスト</span></a><a href="#for-you"><Sparkles size={21} /><span>おすすめ</span></a><button onClick={openAccount}><UserRound size={21} /><span>アカウント</span></button></nav>
@@ -85,11 +90,15 @@ export function HomePage() {
           {unlinkId && <div className="unlink-confirm"><p>{providers.find((p) => p.id === unlinkId)?.name}との連携を解除しますか？次回はほかの連携済みの方法でログインしてください。</p><div><button className="button button-login" disabled={auth.busy} onClick={() => setUnlinkId(null)}>キャンセル</button><button className="button button-dark" disabled={auth.busy} onClick={async () => { if (await auth.unlinkProvider(unlinkId)) { setUnlinkId(null); setAccountNotice("連携を解除しました。"); } }}>連携を解除する</button></div></div>}
           {accountNotice && <p className="account-notice" role="status">{accountNotice}</p>}
           {auth.error && <p className="auth-error" role="alert">{auth.error}</p>}
+          <h3 className="account-heading">おすすめ</h3><button className="text-button" onClick={() => setModal("recommendations")}>おすすめの利用方針・興味なしの管理<ChevronRight size={16} /></button>
           <button className="logout-button" disabled={auth.busy} onClick={async () => { loggingOut.current = true; if (await auth.logout()) router.replace("/"); else loggingOut.current = false; }}>{auth.busy ? <LoaderCircle size={18} className="spinning" /> : <LogOut size={18} />}ログアウト</button>
+        </> : modal === "recommendations" ? <>
+          <DialogTitle className="dialog-title">おすすめ設定</DialogTitle><DialogDescription className="dialog-description">推薦への利用と、表示しないお店を管理します。</DialogDescription>
+          <RecommendationSettings onChanged={onPlacesChanged} />
         </> : <>
           <span className="modal-brand"><Bookmark size={28} /></span><DialogTitle className="dialog-title">「行きたい」を、忘れない。</DialogTitle><DialogDescription className="dialog-description">URLからはじまる、次のお出かけ。</DialogDescription>
           <ol className="home-guide"><li><span>01</span><div><h3>気になるお店を見つける</h3><p>お店のサイトやInstagram・Xで見つけたURLをコピー。</p></div></li><li><span>02</span><div><h3>URLを貼って、リストに残す</h3><p>店舗の情報を自動で取得。個人の記録は非公開から。</p></div></li><li><span>03</span><div><h3>行ってみたら、感想を残す</h3><p>星5段階の評価から、好みに合う次の一軒へ。</p></div></li></ol>
-          <p className="feature-status">URLからの店舗登録、非公開のマイリスト、訪問記録・星5段階の評価をご利用いただけます。おすすめ機能は準備中です。</p>
+          <p className="feature-status">URLからの店舗登録、非公開のマイリスト、訪問記録・星5段階の評価をご利用いただけます。保存や評価の傾向から、おすすめのお店も探せます。</p>
         </>}
       </DialogContent>
     </Dialog>

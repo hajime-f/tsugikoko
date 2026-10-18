@@ -19,7 +19,7 @@ function PlaceArtwork({ id, genre }: { id: string; genre: Genre | null }) {
   return <><span className="place-art" aria-hidden="true"><Motif size={32} strokeWidth={1.5} /></span>{item && <span className="place-genre-caption place-genre-text">{item.label}</span>}</>;
 }
 
-export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () => void }) {
+export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { draft: string; onSaved: () => void; revision?: number; onChanged?: () => void }) {
   const { user } = useAuth();
   const [url, setUrl] = useState(draft);
   const [places, setPlaces] = useState<SavedPlace[]>([]);
@@ -49,6 +49,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
   const requestVersion = useRef(0);
   const fetching = useRef<number | null>(null);
   const loadedPages = useRef(1);
+  const lastRevision = useRef(revision);
   const loadMoreTarget = useRef<HTMLDivElement>(null);
   const sourceInput = useRef<HTMLInputElement>(null);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
@@ -115,6 +116,11 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
     return () => { requestVersion.current++; fetching.current = null; };
   }, [reload]);
   useEffect(() => {
+    if (lastRevision.current === revision) return;
+    lastRevision.current = revision;
+    void reload();
+  }, [revision, reload]);
+  useEffect(() => {
     const target = loadMoreTarget.current;
     if (!target || !cursor || loading || loadingMore || busy || pageError || !("IntersectionObserver" in window)) return;
     const observer = new IntersectionObserver(entries => {
@@ -144,7 +150,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
   const perform = useCallback(async (action: () => Promise<void>, inModal = false) => {
     if (locked.current) return false;
     locked.current = true; setBusy(true); setError(""); setModalError(""); setMessage("");
-    try { await action(); return true; }
+    try { await action(); if (active.current) onChanged?.(); return true; }
     catch (cause) {
       if (active.current) {
         setMessage("");
@@ -152,7 +158,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       }
       return false;
     } finally { locked.current = false; if (active.current) setBusy(false); }
-  }, []);
+  }, [onChanged]);
   const registerUrl = useCallback(async (value: string, automatic = false) => {
     const parsed = createPlaceSchema.safeParse({ url: value });
     if (!parsed.success) { setSaveFailed(true); setError("お店や投稿のURL（https://...）を入力してください。"); sourceInput.current?.focus(); return; }
@@ -254,6 +260,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
     {visitDialog && <VisitDialog key={visitDialog.place.id} place={visitDialog.place} initialMode={visitDialog.mode} api={api}
       onClose={() => setVisitDialog(null)} onBusy={setBusy} onChange={updated => {
         setVisitDialog(current => current ? { ...current, place: updated } : null);
+        onChanged?.();
         const destination = updated.visitCount > 0 ? "visited" : "saved";
         if (tab !== destination) setTab(destination); else void reload();
       }} />}

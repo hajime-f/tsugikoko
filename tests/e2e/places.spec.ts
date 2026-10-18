@@ -25,6 +25,11 @@ function listFixtures(count: number): SavedPlace[] {
   }));
 }
 
+// このスイートは店舗/認証を検証する。推薦の集計と表示は recommendations.spec.ts で検証する。
+test.beforeEach(async ({ page }) => {
+  await page.route(/\/api\/recommendations(?:\?|$)/, route => route.fulfill({ json: { items: [], nextCursor: null, generatedAt: null, mode: "insufficient" } }));
+});
+
 test("未読込のお店も検索し、ジャンル・訪問状況・店名順を組み合わせる", async ({ page }, info) => {
   const email = `search-${info.project.name}-${Date.now()}@example.test`;
   await page.goto("/login");

@@ -78,6 +78,31 @@ export async function createPlace(uid: string, url: string) {
   });
 }
 
+// おすすめからの保存。表示内容はサーバーが共通店舗から解決した情報だけを使い、クライアントの入力は信用しない。
+export async function saveCommonPlace(uid: string, common: { id: string; name: string; address: string; genre: Genre | null; url: string }) {
+  const urlKey = urlKeys(uid).doc(hash(common.url)), placeKey = placeKeys(uid).doc(common.id);
+  return database().runTransaction(async (tx) => {
+    const [byUrl, byPlace] = await Promise.all([tx.get(urlKey), tx.get(placeKey)]);
+    const id = byPlace.get("id") || byUrl.get("id") || hash(common.url);
+    const ref = records(uid).doc(id), existing = await tx.get(ref), now = Date.now();
+    if (existing.exists && !expired(publicRecord(id, existing.data()!))) {
+      const place = publicRecord(id, existing.data()!);
+      if (!place.deleted) return { place, duplicate: true };
+      tx.update(ref, { deleted: false, deleteAt: null, purgeAt: null, updatedAt: now });
+      return { place: { ...place, deleted: false, deleteAt: null, updatedAt: now }, duplicate: true };
+    }
+    const place: SavedPlace = {
+      id, placeId: common.id, url: common.url, sourceUrls: [common.url], name: common.name, address: common.address, note: "", customDetails: false,
+      extraction: "ready", reason: null, sourceLabel: sourceLabel(common.url), fetchedAt: now, createdAt: now, updatedAt: now, lastAttemptAt: null,
+      deleted: false, deleteAt: null, visibility: "private", visitCount: 0, latestVisit: null, genre: common.genre,
+    };
+    tx.set(ref, { ...place, attempts: 0, purgeAt: null });
+    tx.set(urlKey, { id });
+    tx.set(placeKey, { id });
+    return { place, duplicate: false };
+  });
+}
+
 type PlaceFilters = Pick<PlaceListQuery, "q" | "genre" | "sort">;
 const PAGE_SIZE = 30;
 const collator = new Intl.Collator("ja", { sensitivity: "base", numeric: true });

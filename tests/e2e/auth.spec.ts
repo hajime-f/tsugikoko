@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 
 import { providerLogin } from "./helpers";
 
+// このスイートは店舗/認証を検証する。推薦の集計と表示は recommendations.spec.ts で検証する。
+test.beforeEach(async ({ page }) => {
+  await page.route(/\/api\/recommendations(?:\?|$)/, route => route.fulfill({ json: { items: [], nextCursor: null, generatedAt: null, mode: "insufficient" } }));
+});
+
 test("未ログインの直接アクセスでは個人画面を表示しない", async ({ page }) => {
   await page.goto("/home");
   await expect(page).toHaveURL(/\/login$/);

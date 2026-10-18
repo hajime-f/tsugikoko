@@ -13,7 +13,7 @@
     "test:e2e": "playwright test",
     "test:auth": "firebase emulators:exec --only auth,firestore --project demo-tsugikoko \"E2E_AUTH_EMULATOR=1 playwright test\"",
     "test:unit": "node --import tsx --test tests/unit/*.test.ts",
-    "test:extraction": "firebase emulators:exec --only auth,firestore --project demo-tsugikoko \"node --conditions=react-server --import tsx --test tests/integration/extraction.test.ts\"",
+    "test:extraction": "firebase emulators:exec --only auth,firestore --project demo-tsugikoko \"node --conditions=react-server --import tsx --test tests/integration/*.test.ts\"",
     "test:rules": "firebase emulators:exec --only firestore --project demo-tsugikoko \"node --import tsx --test tests/rules/*.test.ts\""
   },
   "dependencies": {

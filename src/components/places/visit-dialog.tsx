@@ -89,7 +89,7 @@ export function VisitDialog({ place, initialMode, api, onClose, onChange, onBusy
           <label className="visit-unrated"><input type="radio" name="rating" value="" checked={fields.rating === null} onChange={() => setFields({ ...fields, rating: null })} />未評価</label>
         </fieldset>
         <label>感想（任意）<textarea rows={3} maxLength={2000} disabled={busy} placeholder="おいしかった一皿や、また行きたい理由など" value={fields.comment} onChange={event => setFields({ ...fields, comment: event.target.value })} /></label>
-        <p className="visit-hint">星だけでも保存できます。感想はあとから追記できます。非公開の保存・評価も、今後おすすめの計算に利用します。</p>
+        <p className="visit-hint">星だけでも保存できます。感想はあとから追記できます。非公開の保存・評価も、おすすめの計算に利用します。</p>
         {error && <p className="auth-error" role="alert">{error}</p>}
         <button className="button button-dark" type="submit" disabled={busy}>{busy ? "保存しています..." : mode === "edit" ? "変更を保存" : "訪問を記録する"}</button>
         <button className="text-button" type="button" disabled={busy} onClick={() => { setError(""); setMode("history"); }}>履歴を見る</button>

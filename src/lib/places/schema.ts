@@ -75,6 +75,14 @@ export type SavedPlace = {
   visitCount: number; latestVisit: VisitSummary | null; genre: Genre | null;
 };
 export type PlaceList = { places: SavedPlace[]; nextCursor: string | null };
+// マイリストの検索条件。qは店名・住所・メモの部分一致、genreの"unset"はジャンル未設定。
+export const placeListQuerySchema = z.object({
+  status: z.enum(["all", "saved", "visited"]).default("all"),
+  q: z.string().trim().max(100, "検索語は100文字以内で入力してください。").default(""),
+  genre: z.union([z.enum(["all", "unset"]), z.custom<Genre>(isGenre, "ジャンルを選び直してください。")]).default("all"),
+  sort: z.enum(["newest", "name"]).default("newest"),
+});
+export type PlaceListQuery = z.infer<typeof placeListQuerySchema>;
 export type VisitList = { visits: Visit[]; nextCursor: string | null };
 
 export function sourceLabel(url: string) {

@@ -244,3 +244,63 @@ test("追加したジャンルを保存・読み出しでき、JSON-LDの料理�
   await processExtraction(uid, created.id, { fetcher: mockPages({ [url]: html }) });
   assert.equal((await database().doc(`users/${uid}/savedPlaces/${created.id}`).get()).get("genre"), "soup_curry");
 });
+
+test("マイリストを店名・住所・メモで検索し、ジャンル・状態で絞り込み、店名順でも安定してページングする", async () => {
+  const uid = `search-${randomUUID()}`, other = `search-other-${randomUUID()}`;
+  const add = async (n: number, fields: { name: string; address?: string; note?: string; genre?: "sushi" | "cafe" | "kissaten" | null }) => {
+    const { place } = await createPlace(uid, `https://www.instagram.com/p/search${n}/`);
+    await updatePlace(uid, place.id, { name: fields.name, address: fields.address ?? "", note: fields.note ?? "", ...(fields.genre !== undefined ? { genre: fields.genre } : {}) });
+    return place.id;
+  };
+  const sushi = await add(1, { name: "鮨 こはる", address: "東京都渋谷区恵比寿1-2-3", note: "誕生日に行きたい", genre: "sushi" });
+  const cafe = await add(2, { name: "ＣＯＦＦＥＥ Stand", address: "東京都目黒区中目黒1-1-1", note: "テラス席", genre: "cafe" });
+  const kissa = await add(3, { name: "純喫茶 あおば", address: "東京都渋谷区道玄坂2-2-2", note: "", genre: "kissaten" });
+  const unnamed = (await createPlace(uid, "https://www.instagram.com/p/search4/")).place.id;
+  const trashed = await add(5, { name: "恵比寿の閉店した店", genre: null });
+  await updatePlace(uid, trashed, { action: "trash" });
+  await createPlace(other, "https://www.instagram.com/p/search-other/").then(({ place }) => updatePlace(other, place.id, { name: "恵比寿 他人の店", address: "", note: "" }));
+  await updateVisit(uid, kissa, { action: "addVisit", visitId: randomUUID(), visitedOn: "2024-03-01", rating: 4, comment: "" });
+  const ids = async (status: "all" | "saved" | "visited", filters: { q?: string; genre?: "all" | "unset" | "sushi" | "cafe" | "kissaten"; sort?: "newest" | "name" }) =>
+    (await listPlaces(uid, false, null, status, { q: "", genre: "all", sort: "newest", ...filters })).places.map((place) => place.id);
+
+  // 空白区切りはAND、各語は店名・住所・メモのどれかに含まれれば一致。全角・大文字も正規化する。
+  assert.deepEqual(await ids("all", { q: "恵比寿" }), [sushi]);
+  assert.deepEqual(await ids("all", { q: "渋谷区 誕生日" }), [sushi]);
+  assert.deepEqual(await ids("all", { q: "渋谷区 テラス" }), []);
+  assert.deepEqual(await ids("all", { q: "coffee" }), [cafe]);
+  assert.deepEqual(await ids("all", { q: "ｓｔａｎｄ" }), [cafe]);
+  // ジャンルの未設定は一覧で返すgenreと一致させ、状態と組み合わせる。
+  assert.deepEqual(await ids("all", { genre: "unset" }), [unnamed]);
+  assert.deepEqual(await ids("all", { genre: "kissaten" }), [kissa]);
+  assert.deepEqual(await ids("visited", { q: "渋谷区" }), [kissa]);
+  assert.deepEqual(await ids("saved", { q: "渋谷区" }), [sushi]);
+  // 店名順は日本語の照合順で、未入力は末尾。
+  const byName = await ids("all", { sort: "name" });
+  assert.equal(byName.at(-1), unnamed);
+  assert.equal(byName.includes(trashed), false);
+  const names = (await listPlaces(uid, false, null, "all", { q: "", genre: "all", sort: "name" })).places.map((place) => place.name);
+  assert.deepEqual(names.slice(0, 3), [...names.slice(0, 3)].sort(new Intl.Collator("ja", { sensitivity: "base", numeric: true }).compare));
+  assert.deepEqual((await listPlaces(uid, true, null, "all", { q: "閉店", genre: "all", sort: "newest" })).places.map((place) => place.id), [trashed]);
+
+  // 同名を含む70件でも、カーソルで重複・欠落なく最後まで読める。
+  const bulk = `search-bulk-${randomUUID()}`;
+  const created: string[] = [];
+  for (let n = 0; n < 70; n++) {
+    const { place } = await createPlace(bulk, `https://www.instagram.com/p/bulk${n}/`);
+    await updatePlace(bulk, place.id, { name: n % 3 ? `店 ${n % 7}` : "", address: "", note: "共通メモ" });
+    created.push(place.id);
+  }
+  for (const sort of ["newest", "name"] as const) {
+    const seen: string[] = [];
+    let cursor: string | null = null, pages = 0;
+    do {
+      const page = await listPlaces(bulk, false, cursor, "all", { q: "共通", genre: "all", sort });
+      seen.push(...page.places.map((place) => place.id));
+      cursor = page.nextCursor; pages++;
+    } while (cursor && pages < 10);
+    assert.equal(pages, 3, sort);
+    assert.equal(new Set(seen).size, 70, sort);
+    assert.deepEqual([...seen].sort(), [...created].sort(), sort);
+  }
+  await assert.rejects(listPlaces(bulk, false, "broken", "all", { q: "共通", genre: "all", sort: "name" }), /一覧の続き/);
+});

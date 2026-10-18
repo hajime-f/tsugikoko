@@ -1,9 +1,10 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { FieldPath, Timestamp } from "firebase-admin/firestore";
+import { z } from "zod";
 import { database } from "@/server/firebase/admin";
 import { ApiError } from "@/server/auth/request";
-import { MAX_VISITS, sortVisits, sourceLabel, type SavedPlace, type Visit, type VisitAction } from "@/lib/places/schema";
+import { MAX_VISITS, sortVisits, sourceLabel, type PlaceListQuery, type SavedPlace, type Visit, type VisitAction } from "@/lib/places/schema";
 import { extractionTarget, fetchPageFacts, type PageFetcher } from "@/server/extraction/sources";
 import { factsSchema } from "@/server/extraction/parser";
 import { genreFromText, isGenre, type Genre } from "@/lib/places/genres";
@@ -77,7 +78,49 @@ export async function createPlace(uid: string, url: string) {
   });
 }
 
-export async function listPlaces(uid: string, trash: boolean, cursor: string | null, status: "all" | "saved" | "visited" = "all") {
+type PlaceFilters = Pick<PlaceListQuery, "q" | "genre" | "sort">;
+const PAGE_SIZE = 30;
+const collator = new Intl.Collator("ja", { sensitivity: "base", numeric: true });
+const searchable = (text: string) => text.normalize("NFKC").toLowerCase();
+// 一覧に必要な項目だけを読み、訪問履歴の本文は読まない。
+const listFields = ["placeId", "url", "sourceUrls", "name", "address", "note", "customDetails", "extraction", "reason", "sourceLabel", "fetchedAt", "createdAt", "updatedAt", "lastAttemptAt", "deleted", "deleteAt", "visitCount", "latestVisit", "genre", "editedFields"];
+const filterCursorSchema = z.object({ n: z.string().max(120), c: z.number().int().nonnegative(), i: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
+type SortKey = z.infer<typeof filterCursorSchema>;
+
+// 新しい順は登録日時の降順、店名順は日本語の照合順で未入力を末尾にし、同順位はIDで固定する。
+function compareBy(sort: PlaceFilters["sort"]) {
+  const newest = (a: SortKey, b: SortKey) => b.c - a.c || (a.i < b.i ? 1 : a.i > b.i ? -1 : 0);
+  if (sort === "newest") return newest;
+  return (a: SortKey, b: SortKey) => Number(!a.n) - Number(!b.n) || collator.compare(a.n, b.n) || (a.n < b.n ? -1 : a.n > b.n ? 1 : 0) || newest(a, b);
+}
+
+// Firestoreは部分一致検索・任意の照合順を扱えないため、本人の該当状態の記録を全件読み込んでから絞り込む。
+async function searchPlaces(uid: string, trash: boolean, cursor: string | null, status: PlaceListQuery["status"], filters: PlaceFilters) {
+  let after: SortKey | null = null;
+  if (cursor) {
+    try { after = filterCursorSchema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"))); }
+    catch { throw new ApiError(400, "一覧の続きが読み込めません。画面を再読み込みしてください。"); }
+  }
+  const terms = searchable(filters.q).split(/\s+/).filter(Boolean);
+  const snapshot = await records(uid).where("deleted", "==", trash).select(...listFields).get();
+  const key = (place: SavedPlace): SortKey => ({ n: place.name ?? "", c: place.createdAt, i: place.id });
+  const compare = compareBy(filters.sort);
+  const matched = snapshot.docs.map((doc) => publicRecord(doc.id, doc.data())).filter((place) => {
+    if (expired(place)) return false;
+    if (!trash && status !== "all" && (status === "visited") !== (place.visitCount > 0)) return false;
+    if (filters.genre !== "all" && place.genre !== (filters.genre === "unset" ? null : filters.genre)) return false;
+    const text = [place.name, place.address, place.note].map((value) => searchable(value ?? ""));
+    return terms.every((term) => text.some((value) => value.includes(term)));
+  }).sort((a, b) => compare(key(a), key(b)));
+  const start = after ? matched.findIndex((place) => compare(key(place), after!) > 0) : 0;
+  const places = start < 0 ? [] : matched.slice(start, start + PAGE_SIZE);
+  const last = places.at(-1);
+  const more = start >= 0 && start + PAGE_SIZE < matched.length;
+  return { places, nextCursor: more && last ? Buffer.from(JSON.stringify(key(last))).toString("base64url") : null };
+}
+
+export async function listPlaces(uid: string, trash: boolean, cursor: string | null, status: PlaceListQuery["status"] = "all", filters: PlaceFilters = { q: "", genre: "all", sort: "newest" }) {
+  if (filters.q || filters.genre !== "all" || filters.sort !== "newest") return searchPlaces(uid, trash, cursor, status, filters);
   let query = records(uid).where("deleted", "==", trash).orderBy("createdAt", "desc").orderBy(FieldPath.documentId(), "desc").limit(31);
   if (cursor) {
     const match = cursor.match(/^(\d{13}):([a-f0-9]{64})$/);

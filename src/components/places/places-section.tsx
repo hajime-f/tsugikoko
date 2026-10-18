@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bookmark, Check, Coffee, ExternalLink, Link2, LoaderCircle, LockKeyhole, MapPin, Pencil, Plus, RotateCcw, Star, Trash2, UtensilsCrossed } from "lucide-react";
+import { Bookmark, Check, Coffee, ExternalLink, Link2, LoaderCircle, LockKeyhole, MapPin, Pencil, Plus, RotateCcw, Search, Star, Trash2, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { createPlaceSchema, type PlaceList, type SavedPlace } from "@/lib/places/schema";
+import { createPlaceSchema, type PlaceList, type PlaceListQuery, type SavedPlace } from "@/lib/places/schema";
 
 import { VisitDialog } from "@/components/places/visit-dialog";
 import { genreGroups, genres, isGenre, type Genre } from "@/lib/places/genres";
 
 const cardMotifs = [Coffee, UtensilsCrossed, MapPin, Bookmark];
 function PlaceArtwork({ id, genre }: { id: string; genre: Genre | null }) {
-  const item = isGenre(genre) ? genres[genre] : null;
+  const item: { label: string; image: string | null } | null = isGenre(genre) ? genres[genre] : null;
   if (item?.image) {
     return <><picture className="place-genre-picture"><source type="image/avif" srcSet={`${item.image}.avif`} /><img src={`${item.image}.webp`} alt={`${item.label}のイメージ写真（実店舗の写真ではありません）`} width={720} height={288} loading="lazy" decoding="async" /></picture><span className="place-genre-caption">{item.label}<small>イメージ</small></span></>;
   }
@@ -29,6 +29,13 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
   const [pageError, setPageError] = useState("");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<"saved" | "visited" | "trash">("saved");
+  const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [genreFilter, setGenreFilter] = useState<PlaceListQuery["genre"]>("all");
+  const [sort, setSort] = useState<PlaceListQuery["sort"]>("newest");
+  const filtered = Boolean(query || genreFilter !== "all");
+  const searching = filtered || sort !== "newest";
+  const clearConditions = useCallback(() => { setSearchInput(""); setQuery(""); setGenreFilter("all"); setSort("newest"); }, []);
   const [error, setError] = useState("");
   const [saveFailed, setSaveFailed] = useState(false);
   const [message, setMessage] = useState("");
@@ -75,6 +82,9 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       // 更新時も表示済みのページ数を維持。追加・削除で境界がずれても重複させない。
       do {
         const params = new URLSearchParams({ trash: tab === "trash" ? "1" : "0", status: tab === "trash" ? "all" : tab });
+        if (query) params.set("q", query);
+        if (genreFilter !== "all") params.set("genre", genreFilter);
+        if (sort !== "newest") params.set("sort", sort);
         if (pageCursor) params.set("cursor", pageCursor);
         const result = await api<PlaceList>(`?${params}`);
         if (!active.current || version !== requestVersion.current) return;
@@ -97,7 +107,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
         fetching.current = null; setLoading(false); setLoadingMore(false);
       }
     }
-  }, [api, tab]);
+  }, [api, tab, query, genreFilter, sort]);
 
   useEffect(() => {
     loadedPages.current = 1; setPlaces([]); setCursor(null); setPageError(""); setError(""); setLoadingMore(false);
@@ -114,13 +124,14 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
     return () => observer.disconnect();
   }, [cursor, loading, loadingMore, busy, pageError, tab, reload]);
   useEffect(() => {
+    if (searching) return; // 検索中の全件読み取りを画面復帰のたびに繰り返さない。
     const onFocus = () => { if (document.visibilityState === "visible") void reload(null, true); };
     document.addEventListener("visibilitychange", onFocus);
     return () => document.removeEventListener("visibilitychange", onFocus);
-  }, [reload]);
+  }, [reload, searching]);
   const pending = places.some((place) => place.extraction === "pending" && !place.deleted);
   useEffect(() => {
-    if (!pending) return;
+    if (!pending || searching) return;
     let count = 0;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
@@ -128,7 +139,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       if (++count >= 40) window.clearInterval(timer);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [pending, reload]);
+  }, [pending, reload, searching]);
 
   const perform = useCallback(async (action: () => Promise<void>, inModal = false) => {
     if (locked.current) return false;
@@ -153,10 +164,11 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       setMessage(result.restored ? "ごみ箱からマイリストに戻しました。" : result.duplicate ? "このURLは登録済みです。保存済みのお店をご確認ください。" : automatic ? "ログイン前のURLを「行きたい」に保存しました。" : "「行きたい」に保存しました。");
       setUrl(""); onSaved();
       const destination = result.place.visitCount > 0 ? "visited" : "saved";
-      if (tab !== destination) setTab(destination); else await reload();
+      clearConditions();
+      if (tab !== destination) setTab(destination); else if (!searching) await reload();
     });
     if (active.current && !saved) setSaveFailed(true);
-  }, [api, onSaved, perform, reload, tab]);
+  }, [api, onSaved, perform, reload, tab, clearConditions, searching]);
   useEffect(() => {
     if (!draft || busy || attemptedDraft.current === draft) return;
     // 同じマウントでは一度だけ自動保存。失敗時はURLを保持して本人が再試行する。
@@ -191,6 +203,21 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
     <section className="my-places-section" id="my-places" aria-labelledby="my-places-title">
       <div className="places-toolbar">
       <div className="member-section-heading"><div><p className="eyebrow section-eyebrow">YOUR LITTLE COLLECTION.</p><h2 id="my-places-title">あなたのマイリスト</h2></div><div className="places-toolbar-actions"><a className="places-add" href="#add-place" aria-label="お店を登録する" onClick={() => sourceInput.current?.focus()}><Plus size={20} /></a><button className="text-button trash-toggle" aria-label={tab === "trash" ? "マイリストに戻る" : "ごみ箱"} disabled={busy} onClick={() => setTab(tab === "trash" ? "saved" : "trash")}><Trash2 size={17} /><span>{tab === "trash" ? "マイリストに戻る" : "ごみ箱"}</span></button></div></div>
+      <form className="place-search" role="search" aria-label="マイリストを検索" onSubmit={event => {
+        event.preventDefault(); const next = searchInput.trim();
+        if (next === query) void reload(); else setQuery(next);
+      }}>
+        <div className="place-search-input"><Search size={18} aria-hidden="true" /><input type="search" aria-label="店名・住所・メモを検索" placeholder="店名・住所・メモを検索" value={searchInput} maxLength={100} disabled={busy} enterKeyHint="search" onChange={event => setSearchInput(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault(); }} /></div>
+        <button type="submit" className="button button-dark" disabled={busy}>検索</button>
+      </form>
+      <div className="place-filters">
+        <div><label htmlFor="place-genre-filter">ジャンル</label><select id="place-genre-filter" value={genreFilter} disabled={busy} onChange={event => { const value = event.target.value; if (value === "all" || value === "unset" || isGenre(value)) setGenreFilter(value); }}>
+          <option value="all">すべてのジャンル</option><option value="unset">未設定</option>
+          {genreGroups.map(group => <optgroup key={group.label} label={group.label}>{group.options.map(genre => <option key={genre} value={genre}>{genres[genre].label}</option>)}</optgroup>)}
+        </select></div>
+        <div><label htmlFor="place-sort">並べ替え</label><select id="place-sort" value={sort} disabled={busy} onChange={event => setSort(event.target.value === "name" ? "name" : "newest")}><option value="newest">登録が新しい順</option><option value="name">店名順</option></select></div>
+      </div>
+      {(searching || searchInput) && <div className="place-filter-summary"><p>{query && <span>「{query}」</span>}{genreFilter !== "all" && <span>{genreFilter === "unset" ? "ジャンル未設定" : genres[genreFilter].label}</span>}{sort === "name" && <span>店名順</span>}</p><button className="text-button" type="button" disabled={busy} onClick={clearConditions}>条件をクリア</button></div>}
       {tab !== "trash" ? <div className="place-tabs" role="tablist" aria-label="店舗の状態">
         <button disabled={busy} role="tab" id="saved-tab" aria-selected={tab === "saved"} aria-controls="places-panel" tabIndex={tab === "saved" ? 0 : -1} onClick={() => setTab("saved")} onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "End"].includes(event.key)) { event.preventDefault(); setTab("visited"); document.getElementById("visited-tab")?.focus(); } }}><Bookmark size={18} />行きたい</button>
         <button disabled={busy} role="tab" id="visited-tab" aria-selected={tab === "visited"} aria-controls="places-panel" tabIndex={tab === "visited" ? 0 : -1} onClick={() => setTab("visited")} onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) { event.preventDefault(); setTab("saved"); document.getElementById("saved-tab")?.focus(); } }}><Check size={18} />訪問済み</button>
@@ -198,6 +225,7 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
       </div>
       <div role={tab === "trash" ? "region" : "tabpanel"} id="places-panel" aria-labelledby={tab === "trash" ? "my-places-title" : `${tab}-tab`} tabIndex={0} aria-busy={loading || loadingMore}>
         {loading && !places.length ? <p className="places-loading" role="status"><LoaderCircle size={20} className="spinning" />マイリストを読み込んでいます...</p>
+          : filtered && !places.length && !error && !cursor ? <div className="places-search-empty" role="status"><Search size={28} aria-hidden="true" /><h3>条件に合うお店が見つかりませんでした。</h3><p>検索する言葉やジャンルを変えてお試しください。</p><button className="text-button" disabled={busy} onClick={clearConditions}>検索・絞り込みを解除</button></div>
           : !places.length && !error && !cursor ? <div className="places-empty"><div className="empty-illustration" aria-hidden="true"><span className="empty-circle" /><span className="empty-paper"><Coffee size={38} strokeWidth={1.3} /><i /><i /></span><span className="empty-pin"><Bookmark size={22} /></span></div><div className="empty-copy"><h3>{tab === "trash" ? "ごみ箱は空です。" : tab === "visited" ? "「行ってよかった」を、残そう。" : "最初の「行きたい」を、ここに。"}</h3><p>{tab === "trash" ? "削除した記録は、ここから元に戻せます。" : tab === "visited" ? "行きたいリストのお店から、訪問日や星の評価を残せます。" : "お店の公式サイトや、SNSで見つけた投稿。\n気になるURLから、リストをはじめましょう。"}</p>{tab === "visited" && <button className="text-button" onClick={() => setTab("saved")}>行きたいリストを見る</button>}{tab === "saved" && <a className="text-button" href="#add-place" onClick={() => sourceInput.current?.focus()}>URLを登録する<Plus size={16} /></a>}</div></div>
           : <div className="saved-place-grid">{places.map((place) => <article className="saved-place-card" data-tone={parseInt(place.id.slice(-4), 16) % 4} key={place.id} aria-label={place.name || `${place.sourceLabel}の保存URL`}>
             <div className="saved-place-top" data-genre={isGenre(place.genre) ? place.genre : undefined} data-genre-image={isGenre(place.genre) && genres[place.genre].image ? true : undefined}><PlaceArtwork id={place.id} genre={place.genre} /><span className="place-state">{place.deleted ? "ごみ箱" : place.visitCount > 0 ? "訪問済み" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>

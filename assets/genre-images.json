@@ -1155,6 +1155,54 @@
       "height": 216,
       "avifBytes": 15627,
       "webpBytes": 20714
+    },
+    {
+      "id": "grill",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/グリル.jpg",
+      "sourceSha256": "97c3f50b78ead1ba8a01002f18a661ef6ea3b70edd89393402cb3cdf3e6c5ec5",
+      "sourceWidth": 900,
+      "sourceHeight": 601,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/grill-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 200,
+        "width": 900,
+        "height": 360
+      },
+      "width": 720,
+      "height": 288,
+      "avifBytes": 16951,
+      "webpBytes": 23958
+    },
+    {
+      "id": "wine_bar",
+      "source": "User-provided photograph",
+      "providedOn": "2026-10-18",
+      "original": "assets/originals/ワインバー.jpg",
+      "sourceSha256": "3a97a3396b02d45febb97663e63f41902d7ceb749abea01012c36a690b44d7b2",
+      "sourceWidth": 612,
+      "sourceHeight": 419,
+      "sourcePage": null,
+      "photographer": null,
+      "license": null,
+      "notes": "Provided by the user for use in genre cards. External source and license were not supplied; not represented as Unsplash-licensed or public domain.",
+      "output": "public/images/genres/wine-bar-provided.{avif,webp}",
+      "crop": {
+        "left": 0,
+        "top": 120,
+        "width": 612,
+        "height": 245
+      },
+      "width": 612,
+      "height": 245,
+      "avifBytes": 9721,
+      "webpBytes": 14094
     }
   ],
   "reused": [

@@ -1,8 +1,7 @@
 import { authenticatedUid, errorResponse, jsonResponse, smallJson } from "@/server/auth/request";
-import { createPlaceSchema } from "@/lib/places/schema";
+import { createPlaceSchema, placeListQuerySchema } from "@/lib/places/schema";
 import { createPlace, limitWrites, listPlaces } from "@/server/places/service";
 import { dispatchExtraction } from "@/server/places/dispatch";
-import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,8 +9,11 @@ export const maxDuration = 60;
 export async function GET(request: Request) {
   try {
     const uid = await authenticatedUid(request), params = new URL(request.url).searchParams;
-    const status = z.enum(["all", "saved", "visited"]).parse(params.get("status") ?? "all");
-    const result = await listPlaces(uid, params.get("trash") === "1", params.get("cursor"), status);
+    const { status, ...filters } = placeListQuerySchema.parse({
+      status: params.get("status") ?? undefined, q: params.get("q") ?? undefined,
+      genre: params.get("genre") ?? undefined, sort: params.get("sort") ?? undefined,
+    });
+    const result = await listPlaces(uid, params.get("trash") === "1", params.get("cursor"), status, filters);
     const pending = result.places.filter((place) => place.extraction === "pending" && !place.deleted).slice(0, 3);
     // 止まった取得の再登録。登録の失敗で一覧表示を止めない。
     await Promise.allSettled(pending.map((place) => dispatchExtraction(uid, place.id)));

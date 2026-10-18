@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { providerLogin } from "./helpers";
 import type { SavedPlace } from "../../src/lib/places/schema";
@@ -23,6 +24,92 @@ function listFixtures(count: number): SavedPlace[] {
     deleted: false, deleteAt: null, visibility: "private", visitCount: 0, latestVisit: null, genre: null,
   }));
 }
+
+test("未読込のお店も検索し、ジャンル・訪問状況・店名順を組み合わせる", async ({ page }, info) => {
+  const email = `search-${info.project.name}-${Date.now()}@example.test`;
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", email);
+  await expect(page.getByRole("heading", { name: "あなたのマイリスト" })).toBeVisible();
+  const database = db();
+  const { uid } = await getAuth(getApps()[0]).getUserByEmail(email);
+  const records = listFixtures(65).map(place => ({ ...place, genre: "sushi", editedFields: ["genre"] }));
+  Object.assign(records[62], { name: "あおい寿司", note: "ＣＡＦＥ 窓際", address: "京都市", genre: "sushi" });
+  Object.assign(records[63], { name: "未分類の一軒", note: "cafe 窓際", address: "京都市", genre: null });
+  Object.assign(records[64], { name: "訪問した寿司", note: "cafe 窓際", address: "京都市", genre: "sushi", visitCount: 1 });
+  const batch = database.batch();
+  for (const place of records) batch.set(database.doc(`users/${uid}/savedPlaces/${place.id}`), place);
+  await batch.commit();
+  await page.reload();
+  await expect(page.getByRole("article")).toHaveCount(30);
+  await expect(page.getByRole("article", { name: "あおい寿司" })).toHaveCount(0);
+  const search = page.getByRole("search", { name: "マイリストを検索" });
+  await search.getByRole("searchbox").fill("cafe 京都 窓際");
+  // 入力だけでは検索しない。名前以外の項目も、全角・大小文字を正規化して検索する。
+  await expect(page.getByRole("article")).toHaveCount(30);
+  await search.getByRole("button", { name: "検索", exact: true }).click();
+  await expect(page.getByRole("article")).toHaveCount(2);
+  await expect(page.getByRole("article", { name: "あおい寿司" })).toBeAttached();
+  await page.locator("#place-genre-filter").selectOption("sushi");
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(page.getByRole("article", { name: "あおい寿司" })).toBeAttached();
+  await page.getByRole("tab", { name: "訪問済み", exact: true }).click();
+  await expect(page.getByRole("article", { name: "訪問した寿司" })).toBeAttached();
+  await page.locator("#place-genre-filter").selectOption("unset");
+  await expect(page.getByText("条件に合うお店が見つかりませんでした。", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "行きたい", exact: true }).click();
+  await expect(page.getByRole("article", { name: "未分類の一軒" })).toBeAttached();
+  await page.screenshot({ path: info.outputPath("place-search-mobile-desktop.png"), animations: "disabled" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "条件をクリア", exact: true }).click();
+  await expect(search.getByRole("searchbox")).toHaveValue("");
+  await expect(page.getByRole("article")).toHaveCount(30);
+  await page.locator("#place-sort").selectOption("name");
+  await expect(page.getByRole("article").first()).toHaveAttribute("aria-label", "あおい寿司");
+  await page.getByRole("button", { name: "もっと見る", exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole("article")).toHaveCount(60);
+  await page.getByRole("button", { name: "もっと見る", exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole("article")).toHaveCount(64);
+  // 条件変更では古いカーソルを持ち越さず、先頭ページから検索し直す。
+  await search.getByRole("searchbox").fill("存在しないお店");
+  await search.getByRole("button", { name: "検索", exact: true }).click();
+  await expect(page.getByText("条件に合うお店が見つかりませんでした。", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "検索・絞り込みを解除" }).click();
+  await expect(page.locator("#place-sort")).toHaveValue("newest");
+  await expect(page.getByRole("article")).toHaveCount(30);
+});
+
+test("検索条件を変えた後は古い応答を無視し、検索中は自動更新しない", async ({ page }, info) => {
+  const [place] = listFixtures(1);
+  let release: () => void = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let delayed = false, filteredReads = 0;
+  await page.route("**/api/places?*", async route => {
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get("q") === "古い検索") {
+      delayed = true; await gate;
+      await route.fulfill({ json: { places: [{ ...place, name: "古い検索のお店" }], nextCursor: null } }); return;
+    }
+    if (params.get("genre") === "sushi") filteredReads++;
+    await route.fulfill({ json: { places: [{ ...place, name: "最新の条件のお店", extraction: "pending" }], nextCursor: null } });
+  });
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `search-race-${info.project.name}-${Date.now()}@example.test`);
+  const search = page.getByRole("search", { name: "マイリストを検索" });
+  await search.getByRole("searchbox").fill("古い検索");
+  await search.getByRole("button", { name: "検索", exact: true }).click();
+  await expect.poll(() => delayed).toBe(true);
+  await page.getByRole("button", { name: "条件をクリア", exact: true }).click();
+  await page.locator("#place-genre-filter").selectOption("sushi");
+  await expect(page.getByRole("article", { name: "最新の条件のお店" })).toBeAttached();
+  const response = page.waitForResponse(res => new URL(res.url()).searchParams.get("q") === "古い検索");
+  release(); await response;
+  await expect(page.getByRole("article", { name: "古い検索のお店" })).toHaveCount(0);
+  const reads = filteredReads;
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  // 通常の3秒間隔を超えても、検索中は全件読み取りを繰り返さない。
+  await page.waitForTimeout(3500);
+  expect(filteredReads).toBe(reads);
+});
 
 test("スクロールで続きを読み込み、失敗の再試行と自動更新でも一覧・位置を保つ", async ({ page }, info) => {
   const places = listFixtures(65);
@@ -145,13 +232,13 @@ test("URL登録・重複防止・編集・再ログイン・ごみ箱を通し�
   await expect(edited.getByRole("button", { name: "編集", exact: true })).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await edited.getByRole("button", { name: "編集", exact: true }).click();
   await expect(genreSelect).toHaveValue("sushi");
-  // 画像がない追加ジャンルも保存でき、再表示後に選択と名称が残る。
+  // 別ジャンルへ変更すると、名称と対応する写真も切り替わる。
   await genreSelect.selectOption({ label: "グリル" });
   await page.screenshot({ path: info.outputPath("genre-edit.png"), animations: "disabled" });
   await page.getByRole("button", { name: "変更を保存", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(edited.locator(".place-genre-caption")).toHaveText("グリル");
-  await expect(edited.locator(".place-genre-picture")).toHaveCount(0);
+  await expect(edited.locator(".place-genre-caption")).toContainText("グリル");
+  await expect(edited.getByRole("img", { name: "グリルのイメージ写真（実店舗の写真ではありません）", exact: true })).toBeVisible();
   await page.reload();
   await edited.getByRole("button", { name: "編集", exact: true }).click();
   await expect(genreSelect).toHaveValue("grill");

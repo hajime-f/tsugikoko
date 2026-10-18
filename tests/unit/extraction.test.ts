@@ -1,15 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyzePage, extractJsonLd, validateAiFacts, AiLimitError, AiUnavailableError } from "../../src/server/extraction/parser";
-import { fetchPageFacts, pageAiText } from "../../src/server/extraction/sources";
-import { geminiRequest, requestGemini } from "../../src/server/extraction/gemini";
+import { analyzePage, extractJsonLd } from "../../src/server/extraction/parser";
+import { fetchPageFacts, isPublicAddress, robotsAllows, safeFetch, type PageFetcher } from "../../src/server/extraction/sources";
 
 const facts = { name: "テスト店", address: "東京都渋谷区恵比寿1-2-3" };
 const restaurant = { "@type": "Restaurant", ...facts };
 const script = (data: unknown) => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
-const pageText = `${facts.name}\n${facts.address}`;
-const aiResult = { unique: true, ...facts, nameEvidence: facts.name, addressEvidence: facts.address };
-const official = "https://www.tabisurucafe.com/bistro-franky-hotel";
+const official = "https://shop.example.com/";
+const html = (body: string, status = 200, contentType = "text/html; charset=utf-8") => ({ status, contentType, body });
+// robots.txtは404（制限なし）、ページは指定した応答を返す。
+const site = (page: ReturnType<typeof html>, robots = html("", 404, "text/plain")): PageFetcher => async url => url.endsWith("/robots.txt") ? robots : page;
 
 test("JSON-LDの配列・@graph・住所参照・重複・壊れた別scriptに対応する", () => {
   assert.deepEqual(extractJsonLd(script([restaurant])), facts);
@@ -28,85 +28,56 @@ test("複数店舗・住所不足・飲食店以外を勝手に確定しない",
   assert.equal(extractJsonLd(script({ ...restaurant, "@type": "Organization" })), null);
 });
 
-test("JSON-LD成功時はAIを呼ばず、失敗時だけ取得済みテキストで補完する", async () => {
-  let calls = 0;
-  const infer = async (text: string) => { calls++; assert.equal(text, pageText); return facts; };
-  assert.deepEqual(await analyzePage(script(restaurant), () => pageText, infer), { facts, method: "json-ld-v1" });
-  assert.equal(calls, 0);
-  for (const html of ["<html></html>", '<script type="application/ld+json">broken</script>', script({ "@type": "Restaurant", name: facts.name })]) {
-    assert.deepEqual(await analyzePage(html, () => pageText, infer), { facts, method: "gemini-text-v1" });
+test("構造化データがなければ推測せず手入力に任せる", () => {
+  assert.deepEqual(analyzePage(script(restaurant)), { facts, method: "json-ld-v1" });
+  for (const page of ["<html></html>", '<script type="application/ld+json">broken</script>', script({ "@type": "Restaurant", name: facts.name }), `<title>${facts.name}</title><p>${facts.address}</p>`]) {
+    assert.deepEqual(analyzePage(page), { facts: null, reason: "not_found" });
   }
-  assert.equal(calls, 3);
 });
 
-test("根拠のないAI回答・複数候補・サイズ超過・上限到達は仮保存へ戻す", async () => {
-  assert.deepEqual(validateAiFacts(aiResult, pageText), facts);
-  assert.equal(validateAiFacts({ ...aiResult, address: "東京都新宿区架空1-2-3" }, pageText), null);
-  assert.equal(validateAiFacts({ ...aiResult, nameEvidence: "存在しない引用" }, pageText), null);
-  assert.equal(validateAiFacts({ ...aiResult, unique: false }, pageText), null);
-  assert.equal(validateAiFacts({ ...aiResult, injected: true }, pageText), null);
-  for (const text of ["", "x".repeat(6001), "あ".repeat(5000)]) {
-    assert.deepEqual(await analyzePage("", () => text, async () => { throw new Error("must not call"); }), { facts: null, reason: "not_found" });
+test("除外サイト・robots.txtの禁止・アクセス拒否は回避せず対象外にする", async () => {
+  const noFetch: PageFetcher = async () => { throw new Error("Fetch must not run"); };
+  for (const url of ["https://tabelog.com/tokyo/A1303/A130302/13323066/", "https://restaurant.ikyu.com/148322", "https://r.gnavi.co.jp/abc123/", "https://www.hotpepper.jp/strJ000000000/", "https://retty.me/area/PRE13/ARE8/SUB803/100000000000/", "https://www.instagram.com/p/example/", "https://x.com/i/status/1", "https://www.google.com/maps/place/x"]) {
+    assert.deepEqual(await fetchPageFacts(url, noFetch), { facts: null, reason: "unsupported" }, url);
   }
-  assert.deepEqual(await analyzePage("", () => pageText, async () => { throw new AiLimitError(); }), { facts: null, reason: "ai_limit" });
-  assert.deepEqual(await analyzePage("", () => pageText, async () => { throw new AiUnavailableError(); }), { facts: null, reason: "ai_unavailable" });
+  assert.deepEqual(await fetchPageFacts(official, site(html(script(restaurant)), html("User-agent: *\nDisallow: /", 200, "text/plain"))), { facts: null, reason: "unsupported" });
+  assert.deepEqual(await fetchPageFacts(official, site(html(script(restaurant)), html("", 503, "text/plain"))), { facts: null, reason: "unsupported" });
+  for (const status of [401, 403, 429, 301, 302]) assert.deepEqual(await fetchPageFacts(official, site(html("blocked", status))), { facts: null, reason: "unsupported" }, String(status));
 });
 
-test("未対応URL・HTTP失敗・リダイレクト・巨大HTMLではAIにアクセスを代行させない", async () => {
-  const infer = async () => { throw new Error("AI must not run"); };
-  const noFetch: typeof fetch = async () => { throw new Error("Fetch must not run"); };
-  for (const url of ["https://tabelog.com/help/rules/", "https://restaurant.ikyu.com/", "http://169.254.169.254/"]) {
-    assert.deepEqual(await fetchPageFacts(url, infer, noFetch), { facts: null, reason: "unsupported" });
-  }
-  for (const status of [403, 429, 302]) {
-    await assert.rejects(fetchPageFacts(official, infer, async (_, init) => {
-      assert.equal(init?.redirect, "manual");
-      return new Response("blocked", { status, headers: { "content-type": "text/html" } });
-    }), /Source unavailable/);
-  }
-  await assert.rejects(fetchPageFacts(official, infer, async () => new Response("x".repeat(1_500_001), { headers: { "content-type": "text/html" } })), /Source too large/);
-  let fetches = 0;
-  assert.deepEqual(await fetchPageFacts(official, infer, async () => { fetches++; return new Response(script(restaurant), { headers: { "content-type": "text/html" } }); }), { facts, method: "json-ld-v1" });
-  assert.equal(fetches, 1);
-});
-
-test("食べログはJSON-LD優先、一休は住所の都道府県・建物名を含めてAIへ渡す", async () => {
-  assert.deepEqual(await fetchPageFacts("https://tabelog.com/tokyo/A1303/A130302/13323066/", async () => { throw new Error("unnecessary AI"); }, async () => new Response(script(restaurant), { headers: { "content-type": "text/html" } })), { facts, method: "json-ld-v1" });
-  const html = `<title>${facts.name}</title><h1>${facts.name}</h1><p>東京都<span>渋谷区恵比寿1-2-3</span> ビル1階</p><svg><title>アイコン名</title></svg><div itemprop="review">東京都新宿区999 口コミ</div>`;
-  const result = await fetchPageFacts("https://restaurant.ikyu.com/123456/", async text => {
-    assert.ok(text.includes("東京都渋谷区恵比寿1-2-3 ビル1階"));
-    assert.ok(!text.includes("アイコン名") && !text.includes("口コミ"));
-    return facts;
-  }, async input => {
-    assert.equal(input, "https://restaurant.ikyu.com/123456");
-    return new Response(html, { headers: { "content-type": "text/html" } });
+test("取得の失敗は手入力に切り替え、成功時はページを1回だけ読む", async () => {
+  assert.deepEqual(await fetchPageFacts(official, site(html("error", 500))), { facts: null, reason: "fetch_failed" });
+  assert.deepEqual(await fetchPageFacts(official, site(html("{}", 200, "application/json"))), { facts: null, reason: "fetch_failed" });
+  assert.deepEqual(await fetchPageFacts(official, async () => { throw new Error("Source too large"); }), { facts: null, reason: "fetch_failed" });
+  const requested: string[] = [];
+  const result = await fetchPageFacts("https://shop.example.com/menu?utm_source=sns", async (url, accept) => {
+    requested.push(`${accept} ${url}`);
+    return url.endsWith("/robots.txt") ? html("User-agent: *\nDisallow: /private", 200, "text/plain") : html(script(restaurant));
   });
-  assert.deepEqual(result, { facts, method: "gemini-text-v1" });
-  assert.ok(pageAiText('<title>カフェ</title><footer><p>東京都<span>品川区東五反田2-5-2</span> ビル1F</p></footer>').includes("東京都品川区東五反田2-5-2 ビル1F"));
-  assert.equal(pageAiText('<title>ログイン</title><form>住所を入力</form>'), "");
+  assert.deepEqual(result, { facts, method: "json-ld-v1" });
+  assert.deepEqual(requested, ["text/plain https://shop.example.com/robots.txt", "text/html https://shop.example.com/menu"]);
 });
 
-test("Geminiは構造化出力・短い出力上限を指定し、拒否や途中回答は確定しない", async () => {
-  const request = geminiRequest(pageText);
-  assert.equal(request.generationConfig.maxOutputTokens, 512);
-  assert.ok(!("tools" in request));
-  const fetcher: typeof fetch = async (url, init) => {
-    assert.ok(String(url).startsWith("https://aiplatform.googleapis.com/"));
-    assert.equal(init?.redirect, "error");
-    return Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: JSON.stringify(aiResult) }] } }] });
-  };
-  assert.deepEqual(await requestGemini(pageText, "test-token", "demo-tsugikoko", fetcher), facts);
-  for (const finishReason of ["MAX_TOKENS", "SAFETY"]) {
-    assert.equal(await requestGemini(pageText, "test-token", "demo-tsugikoko", async () => Response.json({ candidates: [{ finishReason, content: { parts: [{ text: JSON.stringify(aiResult) }] } }] })), null);
-  }
-  let calls = 0;
-  await assert.rejects(requestGemini(pageText, "test-token", "demo-tsugikoko", async () => { calls++; return new Response("unavailable", { status: 429 }); }), AiUnavailableError);
-  assert.equal(calls, 1);
+test("robots.txtはTsugikoko向けの指定を優先し、最も長く一致した規則で判定する", () => {
+  const robots = "User-agent: *\nDisallow: /\n\nUser-agent: Googlebot\nAllow: /";
+  assert.equal(robotsAllows(robots, "/shop"), false);
+  assert.equal(robotsAllows(`${robots}\n\nUser-agent: Tsugikoko\nDisallow: /admin`, "/shop"), true);
+  assert.equal(robotsAllows("User-agent: *\nDisallow: /shop\nAllow: /shop/menu", "/shop/menu"), true);
+  assert.equal(robotsAllows("User-agent: *\nDisallow: /*.php$", "/index.php"), false);
+  assert.equal(robotsAllows("User-agent: *\nDisallow: /*.php$", "/index.php?x=1"), true);
+  assert.equal(robotsAllows("User-agent: *\nDisallow:", "/shop"), true);
+  assert.equal(robotsAllows("", "/shop"), true);
+});
+
+test("内部・ローカル・予約済みのアドレスには接続しない", async () => {
+  await assert.rejects(safeFetch("http://localhost/", "text/html", 1000), /Source address not allowed/);
+  for (const address of ["127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "::", "fd00::1", "fe80::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "not-an-ip"]) assert.equal(isPublicAddress(address), false, address);
+  for (const address of ["8.8.8.8", "203.104.1.1", "2001:4860:4860::8888", "::ffff:8.8.8.8"]) assert.equal(isPublicAddress(address), true, address);
 });
 
 test("店舗自身のJSON-LD料理分類を優先し、店舗情報欄・タイトルを補完に使う", async () => {
   for (const [cuisine, genre] of [["寿司", "sushi"], ["Yakiniku", "yakiniku"], ["焼き鳥", "yakitori"], ["Chinese", "chinese"], ["Italian", "italian"], ["French", "french"]]) {
-    const result = await analyzePage(script({ ...restaurant, servesCuisine: [cuisine] }) + '<table><tr><th>ジャンル</th><td>カフェ</td></tr></table>', () => "", async () => { throw new Error("AI must not run"); });
+    const result = analyzePage(script({ ...restaurant, servesCuisine: [cuisine] }) + '<table><tr><th>ジャンル</th><td>カフェ</td></tr></table>');
     assert.ok(result.facts); assert.equal(result.facts.genre, genre);
   }
   const { enrichGenre, cuisineLabels } = await import("../../src/server/extraction/parser");
@@ -116,12 +87,4 @@ test("店舗自身のJSON-LD料理分類を優先し、店舗情報欄・タイ�
   assert.equal(enrichGenre(facts, `<title>${facts.name} / イタリアン</title>`).genre, "italian");
   assert.equal(enrichGenre(facts, '<title>別店舗 - 寿司</title><p>おいしい寿司の口コミ</p>').genre, undefined);
   assert.equal(enrichGenre(facts, '<p>焼肉メニューの紹介文</p>').genre, undefined);
-  assert.ok(pageAiText(`<title>${facts.name}</title><p>${facts.address}</p><dl><dt>料理ジャンル</dt><dd>焼き鳥</dd></dl>`).includes("料理ジャンル: 焼き鳥"));
-});
-
-test("AIの料理分類も元ページの根拠を確認し、未対応・捏造した分類を採用しない", () => {
-  const text = `${pageText}\n料理ジャンル: 寿司`;
-  assert.equal(validateAiFacts({ ...aiResult, cuisine: "寿司", cuisineEvidence: "料理ジャンル: 寿司" }, text)?.genre, "sushi");
-  assert.equal(validateAiFacts({ ...aiResult, cuisine: "焼肉", cuisineEvidence: "料理ジャンル: 焼肉" }, text)?.genre, undefined);
-  assert.equal(validateAiFacts({ ...aiResult, cuisine: null, cuisineEvidence: null }, text)?.genre, undefined);
 });

@@ -81,5 +81,9 @@ export function sourceLabel(url: string) {
   if (host === "restaurant.ikyu.com") return "一休レストラン";
   if (host === "x.com") return "X";
   if (host === "www.instagram.com") return "Instagram";
+  if (host === "gnavi.co.jp" || host.endsWith(".gnavi.co.jp")) return "ぐるなび";
+  if (host === "hotpepper.jp" || host.endsWith(".hotpepper.jp")) return "ホットペッパーグルメ";
+  if (host === "retty.me" || host.endsWith(".retty.me")) return "Retty";
+  if (/^(maps\.)?google\.(com|co\.jp)$|^maps\.app\.goo\.gl$/.test(host.replace(/^www\./, ""))) return "Googleマップ";
   return host.replace(/^www\./, "");
 }

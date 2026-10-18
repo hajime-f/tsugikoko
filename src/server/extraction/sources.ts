@@ -1,86 +1,134 @@
-import { load } from "cheerio";
-import { analyzePage, cuisineLabels, type AiExtractor, type ExtractionResult } from "./parser";
+import { BlockList, isIP } from "node:net";
+import { lookup } from "node:dns/promises";
+import { request as httpRequest, type IncomingMessage } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { analyzePage, type ExtractionResult } from "./parser";
 import { normalizePlaceUrl } from "../../lib/places/schema";
 
-export type ExtractionSource = {
-  url: string; reviewDate: string; policyUrl: string; version: string;
-  aiScope: string; basis: string; kind: "official" | "page";
-};
-export const reviewedSources: ExtractionSource[] = [{
-  url: "https://www.tabisurucafe.com/bistro-franky-hotel",
-  reviewDate: "2026-10-18",
-  policyUrl: "https://www.tabisurucafe.com/general-5",
-  version: "json-ld-ai-v1",
-  kind: "official",
-  aiScope: "ページタイトル・所在地を記載した連絡先段落・料理ジャンル欄のみ。紹介文・画像・口コミ・利用者情報は外部AIへ送信しない。",
-  basis: "公式店舗ページと公開方針を確認。創作的な紹介文・画像を除き、店名・所在地・料理ジャンルの事実のみ。明示的なライセンス取得ではなく、個別の事実情報の利用として採用。",
-}];
-// 試作として両サイトを有効化するユーザーの明示的指示による設定。
-// サイト運営者の許諾を取得済みという意味ではない。
-export function reviewedSource(value: string): ExtractionSource | undefined {
+export const EXTRACTION_VERSION = "json-ld-v2";
+const USER_AGENT = "Tsugikoko/0.1 (+https://tsugikoko--tsugikoko.asia-east1.hosted.app)";
+const ROBOTS_AGENT = "tsugikoko";
+const MAX_PAGE_BYTES = 1_500_000, MAX_ROBOTS_BYTES = 500_000, TIMEOUT_MS = 8000;
+
+// アクセスの拒否や利用規約上の制限を確認したサイト。URLの保存と元ページへのリンクだけを行う。
+export const excludedHosts = [
+  "tabelog.com", "ikyu.com", "gnavi.co.jp", "hotpepper.jp", "retty.me",
+  "instagram.com", "x.com", "twitter.com", "facebook.com", "tiktok.com", "youtube.com",
+  "google.com", "google.co.jp", "goo.gl",
+];
+const excluded = (host: string) => excludedHosts.some(domain => host === domain || host.endsWith(`.${domain}`));
+
+export type ExtractionTarget = { url: string; version: string };
+
+// 自動入力を試すURL。除外サイト・不正なURLはundefined。
+export function extractionTarget(value: string): ExtractionTarget | undefined {
   let url: string;
   try { url = normalizePlaceUrl(value); } catch { return; }
-  const fixed = reviewedSources.find(source => source.url === url);
-  if (fixed) return fixed;
-  const parsed = new URL(url);
-  const tabelog = parsed.hostname === "tabelog.com" && /^\/\w+\/A\d+\/A\d+\/\d{8}\/$/.test(parsed.pathname);
-  const ikyu = parsed.hostname === "restaurant.ikyu.com" && /^\/\d{6}$/.test(parsed.pathname);
-  if (!tabelog && !ikyu) return;
-  return {
-    url, kind: "page", reviewDate: "2026-10-18", version: "trial-json-ld-ai-v1",
-    policyUrl: tabelog ? "https://tabelog.com/help/rules/" : "https://restaurant.ikyu.com/rsMirror/rsMirrorTerms.asp",
-    aiScope: "店舗名・所在地・料理ジャンルの候補を含むページタイトル・見出し・店舗情報欄。画像・口コミは送らない。",
-    basis: "ユーザーが試作での取得・保存を明示的に指示。運営者の許諾は未取得。停止要請時には対象から外す。",
-  };
+  return excluded(new URL(url).hostname) ? undefined : { url, version: EXTRACTION_VERSION };
 }
 
-export function officialAiText(html: string) {
-  const $ = load(html);
-  const title = $("head > title").first().text().trim();
-  $("script, style, noscript, [hidden], [aria-hidden='true']").remove();
-  const contacts = [...new Set($("p").toArray().map(p => $(p).text().trim()).filter(value => /^\d{3}-\d{4}\s+東京都渋谷区/.test(value)))];
-  return contacts.length ? [title, ...contacts, ...cuisineLabels(html).map(value => `料理ジャンル: ${value}`)].join("\n") : "";
+// ローカル・内部ネットワーク・予約済みのアドレスへは接続しない。
+const blocked = new BlockList();
+for (const [network, prefix] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.0.2.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 3]] as const) blocked.addSubnet(network, prefix, "ipv4");
+for (const [network, prefix] of [["::", 127], ["64:ff9b::", 96], ["100::", 64], ["2001:db8::", 32], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8]] as const) blocked.addSubnet(network, prefix, "ipv6");
+export function isPublicAddress(address: string) {
+  const family = isIP(address);
+  if (family === 4) return !blocked.check(address, "ipv4");
+  if (family !== 6) return false;
+  const mapped = address.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  return mapped ? !blocked.check(mapped[1], "ipv4") : !blocked.check(address, "ipv6");
 }
 
-export function pageAiText(html: string) {
-  const $ = load(html);
-  const title = $("head > title").first().text().trim();
-  const description = $("meta[name='description'], meta[property='og:description']").first().attr("content") ?? "";
-  // 所在地がfooterにだけ載る公式サイトもあるため、footer自体は除去しない。
-  $("script, style, noscript, svg, iframe, nav, form, [hidden], [aria-hidden='true'], [itemprop='review'], .rvw-item, .rvw-item__rvw-comment").remove();
-  $("br").replaceWith("\n");
-  const headings = $("h1").toArray().map(el => $(el).text().trim()).filter(t => t && t.length < 200);
-  const addressPattern = /^(?:住所|所在地)?\s*[:：]?\s*(?:〒\s*)?(?:\d{3}[-ー]\d{4}\s*)?(?:東京都|北海道|大阪府|京都府|.{2,3}県|[^\s]{1,10}[市区郡]).{0,60}\d/;
-  const candidates = $("p, dd, address, td, div, span, li").toArray()
-    .flatMap(el => $(el).text().split(/\r?\n/).map(t => t.replace(/\s+/g, " ").trim()))
-    .filter(text => text.length < 500 && addressPattern.test(text));
-  // 住所内のspanで分割された都道府県や建物名を落とさない。
-  const unique = [...new Set(candidates)];
-  const addresses = unique.filter(text => !unique.some(other => other !== text && other.includes(text)));
-  // SNSプロフィール等では所在地が公開メタ情報にだけ存在することがある。
-  const metaAddresses = description.split(/\r?\n/).map(t => t.trim()).filter(t => t.length < 500 && addressPattern.test(t));
-  const text = [...new Set([title, ...headings, ...addresses, ...metaAddresses, ...cuisineLabels(html).map(value => `料理ジャンル: ${value}`)].filter(Boolean))].join("\n");
-  return addresses.length || metaAddresses.length ? text : "";
-}
+export type FetchedPage = { status: number; contentType: string; body: string };
+export type PageFetcher = (url: string, accept: string, maxBytes: number) => Promise<FetchedPage>;
 
-export async function fetchPageFacts(url: string, infer: AiExtractor, fetcher: typeof fetch = fetch, configuredSource?: ExtractionSource): Promise<ExtractionResult> {
-  const source = configuredSource ?? reviewedSource(url);
-  if (!source) return { facts: null, reason: "unsupported" };
-  if (normalizePlaceUrl(url) !== source.url || !source.url.startsWith("https://")) throw new Error("Source mismatch");
-  // コードまたは管理者専用設定で指定した公開ページのみ。リダイレクト・画像は取得しない。
-  const response = await fetcher(source.url, {
-    redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(8000),
-    headers: { "User-Agent": "Tsugikoko/0.1 (+https://tsugikoko--tsugikoko.asia-east1.hosted.app)", Accept: "text/html" },
+// 名前解決したアドレスを検証してから、そのアドレスへ接続する。リダイレクトは追跡しない。
+export const safeFetch: PageFetcher = async (url, accept, maxBytes) => {
+  const target = new URL(url);
+  const addresses = await lookup(target.hostname, { all: true });
+  if (!addresses.length || !addresses.every(entry => isPublicAddress(entry.address))) throw new Error("Source address not allowed");
+  const [address] = addresses;
+  const request = target.protocol === "https:" ? httpsRequest : httpRequest;
+  return new Promise<FetchedPage>((resolve, reject) => {
+    const req = request(target, {
+      method: "GET", timeout: TIMEOUT_MS,
+      headers: { "User-Agent": USER_AGENT, Accept: accept, "Accept-Encoding": "identity" },
+      lookup: (_host, options, callback) => {
+        if ((options as { all?: boolean }).all) (callback as (error: null, addresses: { address: string; family: number }[]) => void)(null, [address]);
+        else callback(null, address.address, address.family);
+      },
+    }, (response: IncomingMessage) => {
+      const status = response.statusCode ?? 0, contentType = String(response.headers["content-type"] ?? "");
+      if (status < 200 || status >= 300) { response.resume(); resolve({ status, contentType, body: "" }); return; }
+      const chunks: Buffer[] = []; let size = 0;
+      response.on("data", (chunk: Buffer) => {
+        size += chunk.byteLength;
+        if (size > maxBytes) { req.destroy(new Error("Source too large")); return; }
+        chunks.push(chunk);
+      });
+      response.on("end", () => resolve({ status, contentType, body: decode(Buffer.concat(chunks), contentType) }));
+      response.on("error", reject);
+    });
+    req.on("timeout", () => req.destroy(new Error("Source timeout")));
+    req.on("error", reject);
+    req.end();
   });
-  const contentType = response.headers.get("content-type") ?? "";
-  // 原因の切り分け用。URLや本文はエラーに含めない。
-  if (!response.ok || !contentType.includes("text/html") || !response.body) throw new Error(`Source unavailable: HTTP ${response.status} ${contentType.split(";")[0] || "-"}`);
-  const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0;
-  while (true) {
-    const { done, value } = await reader.read(); if (done) break;
-    size += value.byteLength;
-    if (size > 1_500_000) { await reader.cancel(); throw new Error("Source too large"); }
-    chunks.push(value);
+};
+
+function decode(body: Buffer, contentType: string) {
+  const charset = contentType.match(/charset=["']?([\w-]+)/i)?.[1] ?? "utf-8";
+  try { return new TextDecoder(charset).decode(body); }
+  catch { return new TextDecoder("utf-8").decode(body); }
+}
+
+// robots.txt（RFC 9309）のうち、Tsugikoko向けまたは全体向けのAllow/Disallowだけを解釈する。
+export function robotsAllows(robots: string, path: string) {
+  const groups: { agents: string[]; rules: { allow: boolean; path: string }[] }[] = [];
+  let current: (typeof groups)[number] | null = null, lastWasAgent = false;
+  for (const raw of robots.split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, "").trim(), match = line.match(/^([\w-]+)\s*:\s*(.*)$/);
+    if (!match) continue;
+    const key = match[1].toLowerCase(), value = match[2].trim();
+    if (key === "user-agent") {
+      if (!current || !lastWasAgent) groups.push(current = { agents: [], rules: [] });
+      current.agents.push(value.toLowerCase()); lastWasAgent = true;
+    } else {
+      lastWasAgent = false;
+      if (current && (key === "allow" || key === "disallow") && value) current.rules.push({ allow: key === "allow", path: value });
+    }
   }
-  return analyzePage(Buffer.concat(chunks).toString("utf8"), source.kind === "official" ? officialAiText : pageAiText, infer);
+  const own = groups.filter(group => group.agents.some(agent => agent !== "*" && ROBOTS_AGENT.startsWith(agent)));
+  const rules = (own.length ? own : groups.filter(group => group.agents.includes("*"))).flatMap(group => group.rules);
+  const matches = (pattern: string) => {
+    const regex = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\\\$$/, "$");
+    return new RegExp(`^${regex}`).test(path);
+  };
+  // 最も長く一致した規則を採用し、同じ長さならAllowを優先する。
+  const best = rules.filter(rule => matches(rule.path)).sort((a, b) => b.path.length - a.path.length || Number(b.allow) - Number(a.allow))[0];
+  return best ? best.allow : true;
+}
+
+// 拒否・制限された場合は回避せず、手入力に切り替える。URL・本文はエラーに含めない。
+export async function fetchPageFacts(url: string, fetcher: PageFetcher = safeFetch): Promise<ExtractionResult> {
+  const target = extractionTarget(url);
+  if (!target) return { facts: null, reason: "unsupported" };
+  const page = new URL(target.url);
+  let response: FetchedPage;
+  try {
+    // robots.txtが取得できない（5xx・接続失敗）場合は取得を控える。404などは制限なしとして扱う。
+    const robots = await fetcher(`${page.origin}/robots.txt`, "text/plain", MAX_ROBOTS_BYTES);
+    if (robots.status >= 500 || robots.status === 429) return { facts: null, reason: "unsupported" };
+    if (robots.status >= 200 && robots.status < 300 && !robotsAllows(robots.body, `${page.pathname}${page.search}`)) return { facts: null, reason: "unsupported" };
+    response = await fetcher(target.url, "text/html", MAX_PAGE_BYTES);
+  } catch (error) {
+    const message = error instanceof Error && error.message.startsWith("Source ") ? error.message : null;
+    console.error("place_source_unavailable", JSON.stringify({ host: page.hostname, name: error instanceof Error ? error.name : typeof error, code: (error as { code?: unknown })?.code ?? null, message }));
+    return { facts: null, reason: "fetch_failed" };
+  }
+  if ([401, 403, 407, 429, 451].includes(response.status) || (response.status >= 300 && response.status < 400)) return { facts: null, reason: "unsupported" };
+  if (response.status < 200 || response.status >= 300 || !response.contentType.includes("text/html")) {
+    console.error("place_source_unavailable", JSON.stringify({ host: page.hostname, status: response.status, type: response.contentType.split(";")[0] || "-" }));
+    return { facts: null, reason: "fetch_failed" };
+  }
+  return analyzePage(response.body);
 }

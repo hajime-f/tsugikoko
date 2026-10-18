@@ -164,11 +164,11 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
     attemptedDraft.current = draft;
     void registerUrl(draft, true);
   }, [draft, busy, registerUrl]);
-  async function action(place: SavedPlace, action: "retry" | "restore" | "trash") {
+  async function action(place: SavedPlace, action: "restore" | "trash") {
     await perform(async () => {
       await api(`/${place.id}`, { method: "PATCH", body: JSON.stringify({ action }) });
       if (!active.current) return;
-      setModal(null); setMessage(action === "trash" ? "ごみ箱へ移しました。30日間は元に戻せます。" : action === "restore" ? "マイリストに戻しました。" : "店舗情報を再取得しています。追記した内容はそのまま残ります。");
+      setModal(null); setMessage(action === "trash" ? "ごみ箱へ移しました。30日間は元に戻せます。" : "マイリストに戻しました。");
       await reload();
     }, action === "trash");
   }
@@ -203,15 +203,14 @@ export function PlacesSection({ draft, onSaved }: { draft: string; onSaved: () =
             <div className="saved-place-top" data-genre={isGenre(place.genre) ? place.genre : undefined}><PlaceArtwork id={place.id} genre={place.genre} /><span className="place-state">{place.deleted ? "ごみ箱" : place.visitCount > 0 ? "訪問済み" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>
             <h3>{place.name || `${place.sourceLabel}の気になるお店`}</h3>
             {place.address && <p className="place-address">{place.address}</p>}
-            {place.extraction !== "ready" && <p className="place-status-copy">{place.extraction === "pending" ? "URLは保存済みです。画面を閉じても取得処理は続きます。" : place.reason === "unsupported" ? "このサイトの自動取得は未対応です。URLは保存されています。" : place.reason === "ai_limit" ? "自動解析の利用上限に達しました。時間をおいて再取得できます。URLは保存されています。" : place.reason === "ai_unavailable" ? "追加の自動解析を現在利用できません。時間をおいて再取得できます。URLは保存されています。" : place.extraction === "failed" ? "店舗情報を取得できませんでした。URLは保存されています。" : "店舗を特定できませんでした。店名・住所はあとから追記できます。"}</p>}
+            {!place.name.trim() && !place.deleted && <p className="place-status-copy">{place.extraction === "pending" ? "URLは保存済みです。画面を閉じても取得処理は続きます。" : "URLは保存済みです。「編集」から店名・住所を入力できます。"}</p>}
             {place.latestVisit && <p className="place-visit-summary"><Star size={16} aria-hidden="true" /><span>{place.latestVisit.rating === null ? "未評価" : `${place.latestVisit.rating} / 5`}<small>直近の訪問 {place.latestVisit.visitedOn.replaceAll("-", "/")} · {place.visitCount}回訪問</small></span></p>}
             {place.note && <p className="place-note">{place.note}</p>}
             <div className="place-sources">{place.sourceUrls.map((source) => <a key={source} href={source} target="_blank" rel="noopener noreferrer" className="place-source"><span>{source === place.url ? place.sourceLabel : new URL(source).hostname}で見る<small>{source}</small></span><ExternalLink size={15} /></a>)}</div>
             <p className="place-date">{place.deleted ? `${new Date(place.deleteAt!).toLocaleDateString("ja-JP")}まで復元できます` : place.fetchedAt ? `店舗情報の取得: ${new Date(place.fetchedAt).toLocaleDateString("ja-JP")}` : `保存: ${new Date(place.createdAt).toLocaleDateString("ja-JP")}`}</p>
             <div className="place-visit-actions">{!place.deleted && <button className="button button-dark" disabled={busy} onClick={() => setVisitDialog({ place, mode: "add" })}><Check size={16} />{place.visitCount > 0 ? "再訪を記録" : "行ってきた"}</button>}{place.visitCount > 0 && <button className="text-button" disabled={busy} onClick={() => setVisitDialog({ place, mode: "history" })}>訪問履歴（{place.visitCount}）</button>}</div>
             <div className="place-actions">{place.deleted ? <button disabled={busy} onClick={() => void action(place, "restore")}><RotateCcw size={15} />元に戻す</button> : <>
-              <button disabled={busy} onClick={() => edit(place)}><Pencil size={15} />編集</button>
-              {place.reason !== "unsupported" && <button disabled={busy || place.extraction === "pending"} onClick={() => void action(place, "retry")}><RotateCcw size={15} />再取得</button>}
+              <button className={!place.name.trim() ? "place-edit-prominent" : undefined} disabled={busy} onClick={() => edit(place)}><Pencil size={15} />編集</button>
               <button disabled={busy} aria-label={`${place.name || place.sourceLabel}をごみ箱へ移す`} onClick={() => { setModalError(""); setModal({ mode: "trash", place }); }}><Trash2 size={15} />削除</button>
             </>}</div>
           </article>)}</div>}

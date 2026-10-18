@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createPlaceSchema, normalizePlaceUrl } from "../../src/lib/places/schema";
-import { officialAiText, reviewedSource } from "../../src/server/extraction/sources";
+import { extractionTarget } from "../../src/server/extraction/sources";
 
 test("店舗・投稿の識別子を保ったまま、重複URLをまとめる", () => {
   assert.equal(normalizePlaceUrl("https://tabelog.com/tokyo/A1303/A130302/13323066/dtlrvwlst/?utm_source=test#top"), "https://tabelog.com/tokyo/A1303/A130302/13323066/");
@@ -16,18 +16,12 @@ test("実行可能URL・認証情報・ローカル宛先・追加の所有者�
   for (const url of ["javascript:alert(1)", "file:///etc/passwd", "http://127.0.0.1/", "http://2130706433/", "https://user:password@example.com", "http://[::1]/", "https://localhost/", "https://example.com:8080/"]) assert.equal(createPlaceSchema.safeParse({ url }).success, false, url);
   assert.equal(createPlaceSchema.safeParse({ url: "https://example.com/", uid: "another-user" }).success, false);
 });
-test("AIには確認した連絡先とタイトルのみを渡し、写真・紹介文は送らない", () => {
-  const text = officialAiText('<title>TEST BISTRO | tabisurucafe</title><p>153-0022 東京都渋谷区恵比寿南1-17-17 - F5</p><p>創作的な紹介文</p><img src="private-photo.jpg"><p hidden>150-0000 東京都渋谷区別住所</p>');
-  assert.equal(text, "TEST BISTRO | tabisurucafe\n153-0022 東京都渋谷区恵比寿南1-17-17 - F5");
-  assert.equal(officialAiText('<title>TEST | tabisurucafe</title><p>住所なし</p>'), "");
+test("除外サイト以外の公開ページだけを自動入力の対象にする", () => {
+  for (const url of ["https://tabelog.com/tokyo/A1303/A130302/13323066/", "https://s.tabelog.com/tokyo/A1303/A130302/13323066/", "https://restaurant.ikyu.com/148322", "https://www.instagram.com/p/example/", "https://twitter.com/example/status/1", "http://169.254.169.254/", "https://localhost/", "javascript:alert(1)"]) assert.equal(extractionTarget(url), undefined, url);
+  assert.equal(extractionTarget("https://tabelog.com.evil.example/shop")?.url, "https://tabelog.com.evil.example/shop");
+  assert.equal(extractionTarget("https://www.tabisurucafe.com/bistro-franky-hotel/")?.url, "https://www.tabisurucafe.com/bistro-franky-hotel");
+  assert.equal(extractionTarget("https://shop.example.com/?utm_source=sns")?.url, "https://shop.example.com/");
 });
-test("許可範囲外のページを外部取得先にしない", () => {
-  for (const url of ["https://tabelog.com/help/rules/", "https://restaurant.ikyu.com.evil.example/148322", "https://www.instagram.com/p/example/", "https://www.tabisurucafe.com/general-5", "https://www.tabisurucafe.com.evil.example/bistro-franky-hotel", "http://169.254.169.254/"]) assert.equal(reviewedSource(url), undefined);
-  assert.ok(reviewedSource("https://www.tabisurucafe.com/bistro-franky-hotel"));
-  assert.equal(reviewedSource("https://restaurant.ikyu.com/148322/")?.url, "https://restaurant.ikyu.com/148322");
-  assert.equal(reviewedSource("https://tabelog.com/tokyo/A1303/A130302/13323066/")?.kind, "page");
-});
-
 test("訪問日の実在・未来日・整数の星評価・非公開入力を検証する", async () => {
   const { visitActionSchema, todayInJapan } = await import("../../src/lib/places/schema");
   const input = { action: "addVisit", visitId: "12345678-1234-4123-8123-123456789abc", visitedOn: todayInJapan(), rating: 5, comment: "" };

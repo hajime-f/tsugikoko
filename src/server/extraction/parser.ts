@@ -51,27 +51,6 @@ export function extractJsonLd(html: string): PlaceFacts | null {
   return !incomplete && candidates.size === 1 ? [...candidates.values()][0] : null;
 }
 
-const aiFactsSchema = z.object({
-  unique: z.boolean(), name: z.string().nullable(), address: z.string().nullable(),
-  nameEvidence: z.string().max(500).nullable(), addressEvidence: z.string().max(700).nullable(),
-  cuisine: z.string().max(100).nullable().optional(), cuisineEvidence: z.string().max(200).nullable().optional(),
-}).strict();
-
-export function validateAiFacts(value: unknown, pageText: string): PlaceFacts | null {
-  const result = aiFactsSchema.safeParse(value);
-  if (!result.success || !result.data.unique) return null;
-  const facts = factsSchema.safeParse({ name: result.data.name, address: result.data.address });
-  if (!facts.success) return null;
-  const text = compact(pageText);
-  for (const field of ["name", "address"] as const) {
-    const evidence = result.data[`${field}Evidence`];
-    if (!evidence || !text.includes(compact(evidence)) || !compact(evidence).includes(compact(facts.data[field]))) return null;
-  }
-  const { cuisine, cuisineEvidence } = result.data;
-  const genre = cuisine && cuisineEvidence && text.includes(compact(cuisineEvidence)) && compact(cuisineEvidence).includes(compact(cuisine)) ? genreFromText(cuisine) : null;
-  return { ...facts.data, ...(genre ? { genre } : {}) };
-}
-
 // 店舗情報欄の短い分類だけを読む。本文・口コミ・関連記事は分類根拠にしない。
 export function cuisineLabels(html: string): string[] {
   const $ = load(html);
@@ -93,24 +72,11 @@ export function enrichGenre(facts: PlaceFacts, html: string): PlaceFacts {
   return { ...facts, ...(genre ? { genre } : {}) };
 }
 
-export type ExtractionReason = "unsupported" | "not_found" | "ai_unavailable" | "ai_limit";
-export type ExtractionResult = { facts: PlaceFacts; method: "json-ld-v1" | "gemini-text-v1" } | { facts: null; reason: ExtractionReason };
-export type AiExtractor = (text: string) => Promise<PlaceFacts | null>;
-export class AiUnavailableError extends Error {}
-export class AiLimitError extends Error {}
+export type ExtractionReason = "unsupported" | "not_found" | "fetch_failed";
+export type ExtractionResult = { facts: PlaceFacts; method: "json-ld-v1" } | { facts: null; reason: ExtractionReason };
 
-export async function analyzePage(html: string, aiText: (html: string) => string, infer: AiExtractor): Promise<ExtractionResult> {
+// ページに埋め込まれた構造化データだけを読む。特定できなければ推測せず手入力に任せる。
+export function analyzePage(html: string): ExtractionResult {
   const facts = extractJsonLd(html);
-  if (facts) return { facts: enrichGenre(facts, html), method: "json-ld-v1" };
-  const text = aiText(html);
-  // Reject oversized text instead of truncating away another branch/address.
-  if (!text.trim() || text.length > 6000 || Buffer.byteLength(text, "utf8") > 12_000) return { facts: null, reason: "not_found" };
-  try {
-    const facts = await infer(text);
-    return facts ? { facts: enrichGenre(facts, html), method: "gemini-text-v1" } : { facts: null, reason: "not_found" };
-  } catch (error) {
-    if (error instanceof AiLimitError) return { facts: null, reason: "ai_limit" };
-    if (error instanceof AiUnavailableError) return { facts: null, reason: "ai_unavailable" };
-    throw error;
-  }
+  return facts ? { facts: enrichGenre(facts, html), method: "json-ld-v1" } : { facts: null, reason: "not_found" };
 }

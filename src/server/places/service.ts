@@ -4,11 +4,8 @@ import { FieldPath, Timestamp } from "firebase-admin/firestore";
 import { database } from "@/server/firebase/admin";
 import { ApiError } from "@/server/auth/request";
 import { MAX_VISITS, sortVisits, sourceLabel, type SavedPlace, type Visit, type VisitAction } from "@/lib/places/schema";
-import { fetchPageFacts } from "@/server/extraction/sources";
-import { resolveSource } from "@/server/extraction/registry";
+import { extractionTarget, fetchPageFacts, type PageFetcher } from "@/server/extraction/sources";
 import { factsSchema } from "@/server/extraction/parser";
-import { extractWithAi } from "@/server/extraction/ai";
-import { AI_MODEL } from "@/server/extraction/gemini";
 import { genreFromText, isGenre } from "@/lib/places/genres";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -47,7 +44,7 @@ export async function limitWrites(uid: string) {
 
 export async function createPlace(uid: string, url: string) {
   const key = urlKeys(uid).doc(hash(url));
-  const supported = Boolean(await resolveSource(url));
+  const supported = Boolean(extractionTarget(url));
   return database().runTransaction(async (tx) => {
     const mapping = await tx.get(key);
     const id = mapping.data()?.id || hash(url);
@@ -152,7 +149,7 @@ export async function updatePlace(uid: string, id: string, changes: { name: stri
     let patch: Partial<SavedPlace> & { purgeAt?: Timestamp | null; attempts?: number; editedFields?: string[]; refresh?: boolean; queuedAt?: number | null } = { updatedAt: now };
     if ("action" in changes) {
       if (changes.action === "retry") {
-        if (!await resolveSource(place.url)) throw new ApiError(422, "このサイトはまだ自動取得に対応していません。URLは保存されています。");
+        if (!extractionTarget(place.url)) throw new ApiError(422, "このサイトは自動入力の対象外です。店名・住所を入力してください。");
         if (place.lastAttemptAt && now - place.lastAttemptAt < 60_000) throw new ApiError(429, "再取得は1分ほど待ってからお試しください。");
         patch = { ...patch, extraction: "pending", reason: null, attempts: 0, lastAttemptAt: null, refresh: true, queuedAt: null };
       } else if (changes.action === "trash") {
@@ -182,7 +179,7 @@ export async function claimDispatch(uid: string, id: string) {
 }
 
 // "busy" は別の実行が処理中で、ジョブ側で時間をおいて再試行する。
-export async function processExtraction(uid: string, id: string, options: { forceRefresh?: boolean } = {}): Promise<"done" | "busy"> {
+export async function processExtraction(uid: string, id: string, options: { forceRefresh?: boolean; fetcher?: PageFetcher } = {}): Promise<"done" | "busy"> {
   const ref = records(uid).doc(id);
   const attemptId = randomUUID();
   // 永続化した状態とリースで重複実行を防止。中断時はジョブの再試行と一覧の再表示で再開する。
@@ -198,7 +195,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
   if (leased === "busy") return "busy";
   if (!leased) return "done";
   const { place } = leased;
-  const source = await resolveSource(place.url);
+  const source = extractionTarget(place.url);
   async function finishWithoutFacts(reason: SavedPlace["reason"], failed = false) {
     await database().runTransaction(async tx => {
       const current = await tx.get(ref);
@@ -217,7 +214,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
     const maxAge = options.forceRefresh ? 0 : leased.refresh ? REFRESH_CACHE_MS : CACHE_MS;
     const fresh = cache && cache.genre !== undefined && cache.provenance?.version === source.version && Date.now() - cache.fetchedAt >= 0 && Date.now() - cache.fetchedAt < maxAge && cachedFacts.success;
     stage = "fetch";
-    const result = fresh ? { facts: cachedFacts.data, method: cache.provenance.method } : await fetchPageFacts(place.url, text => extractWithAi(uid, text), fetch, source);
+    const result = fresh ? { facts: cachedFacts.data, method: cache.provenance.method } : await fetchPageFacts(place.url, options.fetcher);
     if (!result.facts) {
       await finishWithoutFacts(result.reason);
       return "done";
@@ -225,7 +222,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
     const facts = { ...result.facts, genre: result.facts.genre ?? genreFromText(result.facts.name) };
     const fetchedAt = fresh ? cache.fetchedAt : Date.now();
     const placeId = hash(`${facts.name.normalize("NFKC").toLowerCase().replace(/\s/g, "")}|${facts.address.normalize("NFKC").replace(/\s/g, "")}`);
-    const provenance = fresh ? cache.provenance : { ...source, method: result.method, model: result.method === "gemini-text-v1" ? AI_MODEL : null, fetchedAt };
+    const provenance = fresh ? cache.provenance : { ...source, method: result.method, fetchedAt };
     stage = "save";
     await database().runTransaction(async (tx) => {
       const current = await tx.get(ref), keyRef = placeKeys(uid).doc(placeId), key = await tx.get(keyRef);

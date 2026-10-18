@@ -120,6 +120,9 @@ test("URL登録・重複防止・編集・再ログイン・ごみ箱を通し�
   const card = page.getByRole("article", { name: "Instagramの保存URL" });
   await expect(card).toBeVisible();
   await expect(card).toContainText("情報確認待ち");
+  await expect(card).toContainText("「編集」から店名・住所を入力できます。");
+  await expect(card.getByRole("button", { name: "編集", exact: true })).toHaveCSS("background-color", "rgb(8, 127, 91)");
+  await expect(page.getByRole("button", { name: "再取得", exact: true })).toHaveCount(0);
   await expect(card.getByRole("link")).toHaveAttribute("href", unsupported);
   await page.getByLabel("登録するお店や投稿のURL").fill(`${unsupported}?utm_source=test`);
   await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
@@ -130,8 +133,12 @@ test("URL登録・重複防止・編集・再ログイン・ごみ箱を通し�
   await page.getByRole("dialog").getByLabel("自分用メモ").fill("窓際の席が気になる");
   await page.getByRole("button", { name: "変更を保存", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  const edited = page.getByRole("article", { name: "次の休日のお店" });
+  await expect(edited.getByRole("button", { name: "編集", exact: true })).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(edited.locator(".place-status-copy")).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("article", { name: "次の休日のお店" })).toContainText("窓際の席が気になる");
+  await expect(edited.getByRole("button", { name: "編集", exact: true })).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath("saved-places.png"), fullPage: true });
   await page.getByRole("button", { name: "アカウントを開く" }).click();
@@ -158,7 +165,7 @@ test("自動補完の結果を保存し、未認証・他ユーザーのアク�
   const other = await otherResponse.json();
   const headers = { Authorization: `Bearer ${owner.idToken}` };
   // 取得元への負荷を避け、検証用の取得済み事実をエミュレーターにだけ投入する。
-  await db().doc(`placeSources/${createHash("sha256").update(official).digest("hex")}`).set({ name: "検証用ビストロ", address: "東京都渋谷区テスト1-2-3", genre: null, fetchedAt: Date.now(), provenance: { version: "json-ld-ai-v1", method: "json-ld-v1" } });
+  await db().doc(`placeSources/${createHash("sha256").update(official).digest("hex")}`).set({ name: "検証用ビストロ", address: "東京都渋谷区テスト1-2-3", genre: null, fetchedAt: Date.now(), provenance: { version: "json-ld-v2", method: "json-ld-v1" } });
   expect((await request.get("/api/places")).status()).toBe(401);
   expect((await request.post("/api/places", { data: { url: official } })).status()).toBe(401);
   expect((await request.get("/api/places", { headers: { Authorization: "Bearer invalid" } })).status()).toBe(401);
@@ -292,6 +299,7 @@ test("ジャンルごとの軽量画像を遅延読み込みし、不明な店�
   await page.goto("/login");
   await providerLogin(page, "Googleでログイン", `genre-images-${info.project.name}-${Date.now()}@example.test`);
   await expect(page.getByRole("article")).toHaveCount(entries.length + 1);
+  await expect(page.getByRole("button", { name: "再取得", exact: true })).toHaveCount(0);
   for (const [, genre] of entries) {
     const card = page.getByRole("article", { name: `画像テスト ${genre.label}`, exact: true });
     await card.scrollIntoViewIfNeeded();

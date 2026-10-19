@@ -31,6 +31,7 @@
         "AGENTS.md",
         "CLAUDE.md",
         ".agent-bridge",
+        ".qiita",
         ".agents",
         ".codex",
         "firebase-debug.log",

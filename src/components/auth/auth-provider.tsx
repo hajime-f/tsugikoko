@@ -1,10 +1,11 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { linkWithPopup, onAuthStateChanged, signInWithPopup, signOut, unlink, type User } from "firebase/auth";
+import { getAdditionalUserInfo, linkWithPopup, onAuthStateChanged, signInWithPopup, signOut, unlink, type User } from "firebase/auth";
 import { getClientAuth } from "@/lib/firebase/client";
 import { authErrorMessage, createProvider, isProviderEnabled, type ProviderId } from "@/lib/auth/providers";
 import { claimPendingDraft, clearDraft } from "@/lib/auth/draft";
+import { trackSignUp } from "@/lib/analytics";
 
 type AuthContextValue = {
   user: User | null; loading: boolean; busy: boolean; error: string; providerIds: string[];
@@ -54,7 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user, loading, busy, error, providerIds, clearError: () => setError(""),
     login: (id) => perform(async () => {
       if (!isProviderEnabled(id)) throw { code: "auth/operation-not-allowed" };
-      await signInWithPopup(getClientAuth(), createProvider(id));
+      const result = await signInWithPopup(getClientAuth(), createProvider(id));
+      if (getAdditionalUserInfo(result)?.isNewUser) trackSignUp(id);
     }),
     logout: () => perform(async () => {
       const uid = getClientAuth().currentUser?.uid;

@@ -1,6 +1,6 @@
 import "server-only";
 import { after } from "next/server";
-import { OAuth2Client } from "google-auth-library";
+import { verifyServiceRequest } from "@/server/auth/request";
 import { adminApp } from "@/server/firebase/admin";
 import { claimDispatch, processExtraction } from "@/server/places/service";
 
@@ -43,11 +43,5 @@ export async function dispatchExtraction(uid: string, id: string) {
 
 export async function verifyTaskRequest(request: Request) {
   const config = tasksConfig();
-  const token = request.headers.get("authorization")?.match(/^Bearer (\S+)$/)?.[1];
-  if (!config || !token) return false;
-  try {
-    const ticket = await new OAuth2Client().verifyIdToken({ idToken: token, audience: config.url });
-    const payload = ticket.getPayload();
-    return payload?.email === config.invoker && payload.email_verified === true;
-  } catch { return false; }
+  return config ? verifyServiceRequest(request, config.url, config.invoker) : false;
 }

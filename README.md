@@ -273,3 +273,47 @@ node --conditions=react-server --import tsx scripts/backfill-url-facts.mts --app
 ```
 
 スクリプトは対象の保存記録を読むだけで、書くのは`urlFacts`だけです。ログは件数のみです。`truncated`がtrueの場合は全件を調べられていないため、上限を見直してから実行します。既存の共通情報が新しければ保持し、同じ内容の再実行では書き込みません。
+
+## 利用状況の計測（GA4・BigQuery）
+
+GA4はページの利用状況、BigQueryはサービス側の件数集計に使用します。両者は別の仕組みで、GA4のイベントをBigQueryへエクスポートする設定ではありません。
+
+### GA4の設定
+
+1. Google Analyticsでプロパティと、`https://tsugikoko.com`を対象としたウェブデータストリームを作成します。
+2. ウェブストリームの「拡張計測機能」を無効にします。履歴変更による自動ページビュー、離脱クリック、サイト内検索、フォーム操作、ダウンロード等を自動計測しない設定が必須です。`send_page_view: false`だけでは履歴変更の自動計測を止められません。[Google公式の手動ページビュー設定](https://developers.google.com/analytics/devguides/collection/ga4/views)
+3. 測定ID（`G-...`）を`apphosting.yaml`の`NEXT_PUBLIC_GA_MEASUREMENT_ID`へ設定し、BUILD/RUNTIMEの両方へ渡します。これは公開用のIDです。値はビルドに埋め込まれるため、変更時は再ビルド・デプロイが必要です。空・形式不正の間はタグを読み込まず、GAへの通信もしません。
+4. 本番のRealtimeレポートでページ閲覧を確認します。GA4側にイベント作成ルールや追加タグを設定して、自動計測を再開しないでください。
+
+画面側は`src/lib/analytics.ts`と`src/components/analytics/`です。自動ページビューを無効にし、`/`・`/login`・`/home`へのページ遷移ごとに`page_view`を手動送信します。同じページでの再描画、クエリ・ハッシュだけの変更では追加しません。送信先のページURLは固定の公開ドメインとパスから作り、タイトルも固定値、参照元は空にします。新規登録はFirebaseの`getAdditionalUserInfo(result).isNewUser`を確認して`sign_up`を送り、認証方法名だけを追加します。再ログイン・認証方法の連携・ログイン状態の復元では送信しません。
+
+ユーザーID・氏名・メール・店舗URL・メモ・評価・検索語・位置情報を計測イベントへ渡しません。Googleシグナルと広告のパーソナライズも無効です。GAはCookie等の識別子や端末情報を扱い、接続先にはIPアドレスも伝わるため、「個人を識別する情報が一切外部へ送られない」とは説明しません。[Googleのプライバシー設定](https://developers.google.com/tag-platform/security/guides/privacy)
+
+ログイン前は「プライバシーについて」、ログイン後は「アカウント」→「利用状況の集計・アクセス解析」から、このブラウザーの計測を停止できます。設定は`localStorage`へ保存し、停止中はGoogleの無効化フラグとアプリ側の送信抑止を適用します。停止済みでページを開くとタグを読み込みません。設定を保存・参照できない環境も計測を止めます。タグのブロックや通信失敗はログイン・店舗保存を妨げません。BigQueryの件数集計はこのブラウザー設定とは別です。
+
+### BigQueryの日次集計
+
+Cloud Schedulerから認証付き内部API `/api/internal/metrics` を毎日0時台（日本時間）に呼び、前日の日付をキーに`analytics.daily_metrics`へ保存します。呼び出し元はOIDCトークンの宛先・メールアドレスを検証します。同じ日付の再実行はMERGEで置き換えます。
+
+| 項目 | 集計の意味 |
+| --- | --- |
+| `total_users` / `new_users` | 現存する認証ユーザーのうち、対象日末までの登録数／対象日の登録数 |
+| `active_users_7d` / `active_users_30d` | 認証情報の最終更新時刻（なければ最終ログイン時刻）を使った直近の利用者数 |
+| `users_with_places` / `saved_places` | 集計時点でごみ箱以外の保存記録を持つ人数／保存件数 |
+| `new_saved_places` | 対象日に作成された現存の保存記録数（ごみ箱に移したものも含む） |
+| `visited_places` / `total_visits` | ごみ箱以外の訪問済み保存記録数／訪問回数の合計 |
+| `date` / `generated_at` / `truncated` | 対象日／集計時刻／読み取り上限到達の有無 |
+
+認証情報と保存記録をそれぞれ最大50,000件読み、上限に達した場合は`truncated`で示します。店舗URL、ユーザーID、メール、メモ、評価明細はBigQueryへ送りません。集計用にサーバー内で参照する情報と、BigQueryへ書く件数を区別します。
+
+削除済みユーザーや消去済み記録を復元するイベントログは持たないため、これは厳密な過去日のスナップショットではありません。アクティブ数には日付境界から集計時点までの認証更新も入り、GA4のアクティブユーザー数とは定義が異なります。同日分を後で再実行すると、現存データの変化により結果が変わる場合があります。
+
+`METRICS_ENABLED`、`METRICS_DATASET`、`METRICS_INVOKER`、`METRICS_URL`をサーバーへ設定します。BigQueryデータセット、呼び出し用サービスアカウント、権限、Schedulerの作成・有効化は別途必要です。日次走査のFirestore読み取りとBigQuery・Schedulerの費用を監視してください。
+
+### 計測の検証
+
+```sh
+PATH="$(brew --prefix openjdk@21)/bin:$PATH" firebase emulators:exec --only auth,firestore --project demo-tsugikoko 'E2E_AUTH_EMULATOR=1 E2E_ANALYTICS=1 npx playwright test --workers=1'
+```
+
+測定IDはテスト専用値、Googleタグはネットワークを模擬します。スマホ・PCでページ遷移、新規登録と再ログイン・連携の区別、停止設定、タグ読み込み失敗を確認し、本番GA4へは送信しません。通常の認証E2Eでは測定IDを空にします。実際のタグによる送信とRealtimeへの反映は、プロパティ設定後に本番で別途確認します。

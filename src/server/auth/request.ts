@@ -1,5 +1,6 @@
 import "server-only";
 import { adminAuth } from "@/server/firebase/admin";
+import { OAuth2Client } from "google-auth-library";
 import { ZodError } from "zod";
 
 export class ApiError extends Error {
@@ -10,6 +11,15 @@ export async function authenticatedUid(request: Request) {
   if (!token || token.length > 8192) throw new ApiError(401, "ログインし直してください。");
   try { return (await adminAuth().verifyIdToken(token, true)).uid; }
   catch { throw new ApiError(401, "ログインし直してください。"); }
+}
+// Cloud Tasks・Cloud Schedulerからの呼び出しを、指定したサービスアカウントのOIDCトークンで確認する。
+export async function verifyServiceRequest(request: Request, audience: string, invoker: string) {
+  const token = request.headers.get("authorization")?.match(/^Bearer (\S+)$/)?.[1];
+  if (!token) return false;
+  try {
+    const payload = (await new OAuth2Client().verifyIdToken({ idToken: token, audience })).getPayload();
+    return payload?.email === invoker && payload.email_verified === true;
+  } catch { return false; }
 }
 export async function smallJson(request: Request) {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new ApiError(415, "JSON形式で送信してください。");

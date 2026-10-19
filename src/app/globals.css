@@ -423,6 +423,10 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .unlink-confirm > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .unlink-confirm .button { font-size: 11px; padding: 10px 13px; }
 .account-notice { font-size: 12px; line-height: 1.8; color: var(--green); background: #edf5e6; padding: 12px; }
+.analytics-privacy h3 { margin-top: 24px; font-size: 15px; }
+.analytics-privacy a { text-decoration: underline; text-underline-offset: 3px; }
+.analytics-preference { display: flex; align-items: center; gap: 10px; min-height: 48px; font-size: 14px; cursor: pointer; }
+.analytics-preference input { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--green); }
 .home-guide { list-style: none; padding: 0; display: grid; gap: 24px; }
 .home-guide li { display: flex; gap: 15px; }
 .home-guide li > span { color: var(--green); font-size: 12px; padding-top: 3px; }

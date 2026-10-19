@@ -16,3 +16,4 @@ firebase-debug.log
 firebase-debug.*.log
 firestore-debug.log
 /assets/originals/
+.qiita/

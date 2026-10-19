@@ -1,5 +1,7 @@
 "use client";
 
+import { AnalyticsPrivacy } from "@/components/analytics/analytics-privacy";
+
 import { HeroImage } from "@/components/ui/hero-image";
 import { useEffect, useState, type FormEvent } from "react";
 import {
@@ -271,6 +273,7 @@ export function LandingPage() {
             <DialogTitle className="dialog-title">プライバシーについて</DialogTitle>
             <DialogDescription className="dialog-description">あなたの「行きたい」を、大切に扱います。</DialogDescription>
             <div className="dialog-prose"><p>個人の記録は、原則として非公開です。レビューやリストは、自分で選んだものだけ公開する設計です。</p><p>非公開の保存・評価もおすすめの計算に利用しますが、個人のメモ・訪問記録・評価明細をほかの人に表示しません。</p><p>店名・住所・ジャンルは、同じURLを保存する人の入力補助にも利用します。誰が保存・入力したかは表示しません。</p><p>ログイン時に、認証に必要な名前・メールアドレス等をFirebase Authenticationに保存します。「保存してはじめる」で入力したURLはログイン完了後にサーバーへ保存し、本人だけが見られるマイリストに追加します。保存デモは画面内のみで動作し、位置情報も取得しません。</p></div>
+            <AnalyticsPrivacy />
           </>}
           {modal === "credits" && <>
             <DialogTitle className="dialog-title">写真のクレジット</DialogTitle>

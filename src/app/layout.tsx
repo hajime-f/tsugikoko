@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { SITE_URL } from "@/lib/site";
+import { Analytics } from "@/components/analytics/analytics";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" data-scroll-behavior="smooth">
-      <body><AuthProvider>{children}</AuthProvider></body>
+      <body><Analytics /><AuthProvider>{children}</AuthProvider></body>
     </html>
   );
 }

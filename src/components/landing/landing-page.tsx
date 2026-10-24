@@ -1,6 +1,7 @@
 "use client";
 
 import { AnalyticsPrivacy } from "@/components/analytics/analytics-privacy";
+import { ShareSiteSection } from "@/components/places/share-place-button";
 
 import { HeroImage } from "@/components/ui/hero-image";
 import { useEffect, useState, type FormEvent } from "react";
@@ -246,6 +247,7 @@ export function LandingPage() {
         <section className="final-cta">
           <div className="section final-cta-inner"><div><p>次の休日、どこに行こう。</p><h2>その答えを、ツギココに。</h2></div><button className="button button-dark" onClick={() => openAuth("signup")}>行きたいリストをつくる<ArrowRight size={19} aria-hidden="true" /></button></div>
         </section>
+        <div className="section"><ShareSiteSection /></div>
       </main>
 
       <footer className="site-footer">

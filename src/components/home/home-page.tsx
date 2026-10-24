@@ -13,6 +13,7 @@ import { clearDraft, readDraft } from "@/lib/auth/draft";
 import { RecommendationsSection, RecommendationSettings } from "@/components/recommendations/recommendations-section";
 import { MilestoneNotice } from "@/components/home/milestone-notice";
 import { PlacesSection } from "@/components/places/places-section";
+import { ShareSiteSection } from "@/components/places/share-place-button";
 
 function UserAvatar({ photoURL, initial }: { photoURL: string | null; initial: string }) {
   const [failedURL, setFailedURL] = useState<string | null>(null);
@@ -88,6 +89,7 @@ export function HomePage() {
 
       <RecommendationsSection key={`recommendations-${user.uid}`} revision={recommendationsRevision} onSaved={onRecommendationSaved} onSettings={() => setModal("recommendations")} />
       <PlacesSection key={user.uid} draft={draft} onSaved={onSaved} revision={placesRevision} onChanged={onPlacesChanged} />
+      <ShareSiteSection />
       <footer className="member-footer"><span>気になったら、ツギココ。</span><button onClick={openAccount}>アカウント設定<ArrowRight size={14} /></button></footer>
     </main>
 

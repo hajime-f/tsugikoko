@@ -1,5 +1,49 @@
 import { expect, test } from "@playwright/test";
 
+test("未ログインでツギココをSNSに紹介でき、現在のURLや入力内容を共有しない", async ({ page }, info) => {
+  const text = "気になったら、ツギココ。\nSNSやグルメサイトで見つけた行きたいお店を、ひとつのマイリストに。";
+  const url = "https://tsugikoko.com";
+  const preview = `${text}\n${url}`;
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", { configurable: true, value: undefined });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value: string) => { sessionStorage.setItem("test:copied", value); } } });
+  });
+  await page.goto("/?private=value#url-form");
+  await page.getByRole("textbox", { name: "気になるお店や投稿のURL" }).fill("https://example.com/private-place");
+  const trigger = page.getByRole("button", { name: "ツギココをSNSで紹介", exact: true });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "ツギココをSNSで紹介" });
+  await expect(dialog.getByRole("textbox", { name: "投稿内容" })).toHaveValue(preview);
+  await expect(dialog.getByRole("button", { name: "その他の共有" })).toHaveCount(0);
+  for (const [label, endpoint] of [["Xで投稿", "https://x.com/intent/tweet"], ["LINEで送る", "https://social-plugins.line.me/lineit/share"]]) {
+    const link = dialog.getByRole("link", { name: label });
+    const target = new URL((await link.getAttribute("href"))!);
+    expect(target.origin + target.pathname).toBe(endpoint);
+    expect(Object.fromEntries(target.searchParams)).toEqual({ text, url });
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  }
+  await dialog.getByRole("button", { name: "投稿文をコピー" }).click();
+  await expect(dialog.getByRole("status")).toContainText("コピーしました");
+  expect(await page.evaluate(() => sessionStorage.getItem("test:copied"))).toBe(preview);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath("site-share.png") });
+  await dialog.getByRole("button", { name: "閉じる", exact: true }).click();
+  await expect(trigger).toBeFocused();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "share", { configurable: true, value: async (data: ShareData) => { sessionStorage.setItem("test:shared", JSON.stringify(data)); throw new DOMException("Cancelled", "AbortError"); } });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("denied"); } } });
+  });
+  await trigger.click();
+  await expect(dialog.getByRole("status")).toHaveText("");
+  await dialog.getByRole("button", { name: "その他の共有" }).click();
+  expect(JSON.parse((await page.evaluate(() => sessionStorage.getItem("test:shared")))!)).toEqual({ text, url });
+  await expect(dialog.getByRole("status")).toHaveText("");
+  await dialog.getByRole("button", { name: "投稿文をコピー" }).click();
+  await expect(dialog.getByRole("status")).toContainText("コピーできませんでした");
+  await expect(dialog.getByRole("textbox", { name: "投稿内容" })).toHaveValue(preview);
+});
+
 test("トップページが表示され、画像・画面幅・実行時エラーに問題がない", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));

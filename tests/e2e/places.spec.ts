@@ -618,4 +618,9 @@ test("SNS共有は店名とURLだけを渡し、コピーと端末共有に対�
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(card.getByRole("button", { name: "共有", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "ツギココをSNSで紹介", exact: true }).click();
+  const siteDialog = page.getByRole("dialog", { name: "ツギココをSNSで紹介" });
+  await expect(siteDialog.getByRole("textbox", { name: "投稿内容" })).toHaveValue("気になったら、ツギココ。\nSNSやグルメサイトで見つけた行きたいお店を、ひとつのマイリストに。\nhttps://tsugikoko.com");
+  await expect(siteDialog).not.toContainText(place.note);
+  await expect(siteDialog).not.toContainText("テストユーザー");
 });

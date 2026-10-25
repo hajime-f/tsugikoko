@@ -387,3 +387,14 @@ firebase emulators:exec --only auth,firestore --project demo-tsugikoko 'node --c
 - [Firestoreの再帰削除](https://docs.cloud.google.com/nodejs/docs/reference/firestore/latest/firestore/firestore)
 - [個人情報保護委員会の通則ガイドライン](https://www.ppc.go.jp/personalinfo/legal/guidelines_tsusoku/)
 - Metaのデータ削除・Platform Termsの公式ページは取得制限により本文を確認できなかったため、今回のMeta管理画面の要件表示を優先。最終提出時は管理画面からリンクされる現行の条件も確認する。
+
+
+## 利用規約とログイン時の案内（2026年10月25日）
+
+`/terms`に、サービス内容、ログインによる同意、新規登録、アカウント管理、入力情報の権利、禁止事項、店舗情報・おすすめの扱い、データ削除、利用制限、サービス変更、責任、規約変更、準拠法と連絡先を記載しました。無料の現状とメールによる削除受付に合わせています。本番反映後のURLは `https://tsugikoko.com/terms` です。
+
+ログインページとトップページのログイン・新規登録ダイアログで、認証ボタンより前に「ログインにより、利用規約に同意したものとみなします。新規登録も同様です。」を表示します。リンクは別タブで開き、入力中のURLや認証画面を保持します。各認証ボタンの読み上げ説明にも関連付けています。チェックボックスは設けません。トップページのフッター、アカウント画面、ポリシー・削除案内のフッターからも規約を参照できます。
+
+今回の変更は規約と事前表示の追加です。同意時刻・規約版を保存する履歴APIは実装していません。既存のログイン状態の復元を新たな同意として記録したり、過去に同意済みだったと扱ったりする処理も追加していません。
+
+文案作成では[法務省の定型約款の説明](https://www.moj.go.jp/content/001255638.pdf)と[消費者庁の消費者契約条項に関する解説](https://www.caa.go.jp/policies/policy/consumer_system/consumer_contract_act/annotations/assets/consumer_system_cms203_230915_12.pdf)を参照しました。運営者の全面免責・任意の遡及変更は規定せず、法令に従う責任と事前周知・必要な個別同意を記載しています。

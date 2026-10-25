@@ -112,7 +112,7 @@ export function HomePage() {
           {auth.error && <p className="auth-error" role="alert">{auth.error}</p>}
           <h3 className="account-heading">おすすめ</h3><button className="text-button" onClick={() => setModal("recommendations")}>おすすめの利用方針・興味なしの管理<ChevronRight size={16} /></button>
           <h3 className="account-heading">プライバシー</h3><button className="text-button" onClick={() => setModal("privacy")}>利用状況の集計・アクセス解析<ChevronRight size={16} /></button>
-          <p className="auth-footnote"><a href="/privacy">プライバシーポリシー</a>・<a href="/data-deletion">データの削除を依頼する</a></p>
+          <p className="auth-footnote"><a href="/terms">利用規約</a>・<a href="/privacy">プライバシーポリシー</a>・<a href="/data-deletion">データの削除を依頼する</a></p>
           <button className="logout-button" disabled={auth.busy} onClick={async () => { loggingOut.current = true; if (await auth.logout()) router.replace("/"); else loggingOut.current = false; }}>{auth.busy ? <LoaderCircle size={18} className="spinning" /> : <LogOut size={18} />}ログアウト</button>
         </> : modal === "privacy" ? <>
           <DialogTitle className="dialog-title">利用状況の集計・アクセス解析</DialogTitle><DialogDescription className="dialog-description">サービス改善のために利用する情報と、アクセス解析の設定です。</DialogDescription>

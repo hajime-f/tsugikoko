@@ -10,6 +10,6 @@ export function PrivacyDocument({ title, children }: { title: string; children: 
       {children}
       <section><h2>お問い合わせ</h2><p>運営者：{SITE_OPERATOR}<br />連絡先：<a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></p></section>
     </main>
-    <footer className="policy-footer"><a href="/privacy">プライバシーポリシー</a><a href="/data-deletion">データの削除</a><a href="/">ツギココに戻る</a></footer>
+    <footer className="policy-footer"><a href="/terms">利用規約</a><a href="/privacy">プライバシーポリシー</a><a href="/data-deletion">データの削除</a><a href="/">ツギココに戻る</a></footer>
   </div>;
 }

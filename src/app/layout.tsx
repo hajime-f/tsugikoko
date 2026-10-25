@@ -22,6 +22,17 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" data-scroll-behavior="smooth">
+      <head>
+        {/* Google tag (gtag.js) */}
+        <script id="tsugikoko-google-ads" async src="https://www.googletagmanager.com/gtag/js?id=AW-18532065959" />
+        <script id="tsugikoko-google-ads-config" dangerouslySetInnerHTML={{ __html: `
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'AW-18532065959');
+` }} />
+      </head>
       <body><Analytics /><AuthProvider>{children}</AuthProvider></body>
     </html>
   );

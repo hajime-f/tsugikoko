@@ -47,19 +47,23 @@ function initialize() {
   const target = window as AnalyticsWindow;
   if (!initialized) {
     target.dataLayer ??= [];
-    target.gtag = function () { target.dataLayer!.push(arguments); };
+    const existingTag = typeof target.gtag === "function";
+    target.gtag ??= function () { target.dataLayer!.push(arguments); };
     // 実URLのクエリ・ハッシュや参照元を、初期化時から渡さない。
     target.gtag("set", { page_location: SITE_URL + "/", page_title: pages["/"], page_referrer: "" });
-    target.gtag("js", new Date());
+    if (!existingTag) target.gtag("js", new Date());
     target.gtag("config", measurementId, {
       send_page_view: false, allow_google_signals: false, allow_ad_personalization_signals: false,
     });
-    const script = document.createElement("script");
-    script.id = "tsugikoko-analytics";
-    script.async = true;
-    script.referrerPolicy = "no-referrer";
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
-    document.head.appendChild(script);
+    // headのGoogle広告タグとライブラリを共用する。GA4の送信先・停止設定は独立させる。
+    if (!document.getElementById("tsugikoko-google-ads")) {
+      const script = document.createElement("script");
+      script.id = "tsugikoko-analytics";
+      script.async = true;
+      script.referrerPolicy = "no-referrer";
+      script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
+      document.head.appendChild(script);
+    }
     initialized = true;
   }
   return target.gtag;

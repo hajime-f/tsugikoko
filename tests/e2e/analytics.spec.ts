@@ -5,7 +5,7 @@ const commands = (page: Page) => page.evaluate(() => ((window as Window & { data
 const events = async (page: Page, name: string) => (await commands(page)).filter(item => item[0] === "event" && item[1] === name);
 
 test.beforeEach(async ({ context, page }) => {
-  // 実際のGA4へテストデータを送らず、アプリがキューへ渡す内容を検証する。
+  // 実際のGA4・Google広告へ送信せず、アプリがキューへ渡す内容を検証する。
   await context.route(/https:\/\/[^/]*(?:googletagmanager|google-analytics)\.com\//, route => route.fulfill({ contentType: "text/javascript", body: "" }));
   await page.route("**/api/milestones", route => route.fulfill({ json: { total: 0, pending: null } }));
   await page.route(/\/api\/recommendations(?:\?|$)/, route => route.fulfill({ json: { items: [], nextCursor: null, generatedAt: null, mode: "insufficient", area: null } }));
@@ -15,8 +15,12 @@ test("GA4はURLの機密情報を除き、ページ遷移と初回登録だけ�
   const email = `analytics-${info.project.name}-${Date.now()}@example.test`;
   await page.goto("/login?secret=private-search#private-note");
   await expect.poll(() => events(page, "page_view").then(items => items.length)).toBe(1);
-  const setup = (await commands(page)).find(item => item[0] === "config");
+  const setup = (await commands(page)).find(item => item[0] === "config" && item[1] === "G-TSUGIKOKOTEST");
   expect(setup?.[2]).toMatchObject({ send_page_view: false, allow_google_signals: false, allow_ad_personalization_signals: false });
+  expect((await commands(page)).filter(item => item[0] === "config" && item[1] === "AW-18532065959")).toEqual([["config", "AW-18532065959"]]);
+  expect((await commands(page)).filter(item => item[0] === "js")).toHaveLength(1);
+  await expect(page.locator('head script[src*="googletagmanager.com/gtag/js"]')).toHaveCount(1);
+  await expect(page.locator("head #tsugikoko-google-ads")).toHaveAttribute("src", "https://www.googletagmanager.com/gtag/js?id=AW-18532065959");
   expect((await events(page, "page_view"))[0][2]).toEqual({ page_location: "https://tsugikoko.com/login", page_title: "ログイン | ツギココ", page_referrer: "", send_to: "G-TSUGIKOKOTEST" });
   await page.evaluate(() => history.pushState({}, "", "?q=private-query#private-hash"));
   await providerLogin(page, "Googleでログイン", email);
@@ -45,11 +49,12 @@ test("GA4の停止設定は再読込後も有効で、解析を止めても登�
   const dialog = page.getByRole("dialog");
   const checkbox = dialog.getByRole("checkbox", { name: "このブラウザーでアクセス解析を停止する" });
   await expect(checkbox).toBeChecked();
-  expect(await commands(page)).toHaveLength(0);
+  expect((await commands(page)).filter(item => item[0] === "event" || (item[0] === "config" && item[1] === "G-TSUGIKOKOTEST"))).toHaveLength(0);
+  expect((await commands(page)).filter(item => item[0] === "config")).toEqual([["config", "AW-18532065959"]]);
   await expect(page.locator("#tsugikoko-analytics")).toHaveCount(0);
   await checkbox.uncheck();
   await expect.poll(() => events(page, "page_view").then(items => items.length)).toBe(1);
-  await expect(page.locator("#tsugikoko-analytics")).toHaveCount(1);
+  await expect(page.locator('head script[src*="googletagmanager.com/gtag/js"]')).toHaveCount(1);
   const other = await context.newPage();
   await other.goto("/");
   await expect.poll(() => events(other, "page_view").then(items => items.length)).toBe(1);
@@ -66,7 +71,7 @@ test("GA4の停止設定は再読込後も有効で、解析を止めても登�
   await providerLogin(page, "Googleでログイン", `analytics-off-${info.project.name}-${Date.now()}@example.test`);
   await expect(page).toHaveURL(/\/home$/);
   await expect(page.getByRole("heading", { name: "あなたのマイリスト" })).toBeVisible();
-  expect(await commands(page)).toHaveLength(0);
+  expect((await commands(page)).filter(item => item[0] === "event" || (item[0] === "config" && item[1] === "G-TSUGIKOKOTEST"))).toHaveLength(0);
   await page.getByRole("button", { name: "アカウントを開く" }).click();
   await page.getByRole("button", { name: "利用状況の集計・アクセス解析" }).click();
   await expect(page.getByRole("checkbox", { name: "このブラウザーでアクセス解析を停止する" })).toBeChecked();

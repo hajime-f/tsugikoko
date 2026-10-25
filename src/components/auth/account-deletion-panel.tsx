@@ -57,6 +57,6 @@ export function AccountDeletionPanel({ onAccepted, onCancel }: { onAccepted: () 
       <button type="button" className="button deletion-submit" disabled={!confirmation || sending || auth.busy} onClick={submit}>{sending ? "退会を受け付けています…" : "退会してデータを削除する"}</button>
     </>}
     {(error || auth.error) && <p className="auth-error" role="alert">{error || auth.error}</p>}
-    <button type="button" className="button button-login" disabled={sending || auth.busy} onClick={onCancel}>退会せずに戻る</button>
+    <button type="button" className="button deletion-cancel" disabled={sending || auth.busy} onClick={onCancel}>退会せずに戻る</button>
   </div>;
 }

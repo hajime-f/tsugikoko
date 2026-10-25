@@ -767,5 +767,8 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .account-deletion a { text-decoration: underline; text-underline-offset: 3px; }
 .deletion-confirmation { display: flex; align-items: flex-start; gap: 10px; margin: 20px 0; }
 .deletion-confirmation input { flex-shrink: 0; width: 20px; height: 20px; margin-top: 3px; }
-.deletion-submit { background: #963a32; color: #fff; width: 100%; margin-bottom: 18px; }
+.deletion-submit { background: #963a32; color: #fff; width: 100%; }
+.deletion-cancel { display: flex; width: 100%; margin-top: 24px; background: var(--green); color: #fff; }
+.deletion-cancel:hover:not(:disabled) { background: #066448; }
+.deletion-cancel:disabled { opacity: .55; }
 .deletion-receipt { padding: 20px; border-radius: 12px; background: #eef3e7; margin: 20px 0; }

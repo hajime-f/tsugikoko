@@ -96,11 +96,14 @@ function safePlace(doc: FirebaseFirestore.DocumentSnapshot): DismissedRecommenda
 // 期限切れなら1つのリクエストだけが作り直し、ほかは古い集計を使う。
 // 集計がまだ一度もできていない（作成中・失敗後の待機中）場合は、データ不足ではなく一時的な障害として扱う。
 async function currentModel(now = Date.now()): Promise<Model> {
-  const model = parseModel(await modelRef().get());
+  const [snapshot, initialLock] = await Promise.all([modelRef().get(), lockRef().get()]);
+  if (initialLock.get("maintenance")) return unavailable();
+  const model = parseModel(snapshot);
   if (model && now - model.generatedAt < MODEL_TTL_MS) return model;
   const token = randomUUID();
   const claim = await database().runTransaction(async tx => {
     const [lock, latest] = await Promise.all([tx.get(lockRef()), tx.get(modelRef())]);
+    if (lock.get("maintenance")) return unavailable();
     // 先行する処理が作り直し終えていれば、それを使う。
     if (latest.get("version") === MODEL_VERSION && now - (latest.get("generatedAt") ?? 0) < MODEL_TTL_MS) return "fresh" as const;
     if ((lock.get("lockedUntil") ?? 0) > now) return "busy" as const;
@@ -119,10 +122,18 @@ async function currentModel(now = Date.now()): Promise<Model> {
   });
   try {
     const fresh = await buildModel(now);
-    await modelRef().set({ generatedAt: fresh.generatedAt, version: MODEL_VERSION, data: serializeModel(fresh) });
+    const published = await database().runTransaction(async tx => {
+      const lock = await tx.get(lockRef());
+      if (lock.get("token") !== token || lock.get("maintenance")) return false;
+      tx.set(modelRef(), { generatedAt: fresh.generatedAt, version: MODEL_VERSION, data: serializeModel(fresh) });
+      return true;
+    });
+    if (!published) return unavailable();
     await release(0);
     return fresh;
   } catch (error) {
+    const lock = await lockRef().get();
+    if (lock.get("maintenance") || lock.get("token") !== token) return unavailable();
     console.error("recommendation_model_failed", error instanceof Error ? error.name : "unknown");
     await release(Date.now() + RETRY_AFTER_FAILURE_MS).catch(() => undefined);
     return model ?? unavailable();

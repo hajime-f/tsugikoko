@@ -251,7 +251,7 @@ export function LandingPage() {
       </main>
 
       <footer className="site-footer">
-        <div className="section footer-inner"><div><a href="#" aria-label="ツギココ ホーム"><Brand /></a><p className="footer-tagline">気になったら、ツギココ</p></div><nav aria-label="フッターナビゲーション"><a href="#how-it-works">使い方</a><a href="#faq-title">よくある質問</a><button onClick={() => setModal("privacy")}>プライバシーについて</button><button onClick={() => setModal("credits")}>写真のクレジット</button></nav></div>
+        <div className="section footer-inner"><div><a href="#" aria-label="ツギココ ホーム"><Brand /></a><p className="footer-tagline">気になったら、ツギココ</p></div><nav aria-label="フッターナビゲーション"><a href="#how-it-works">使い方</a><a href="#faq-title">よくある質問</a><button onClick={() => setModal("privacy")}>プライバシーについて</button><a href="/privacy">プライバシーポリシー</a><a href="/data-deletion">データの削除</a><button onClick={() => setModal("credits")}>写真のクレジット</button></nav></div>
         <div className="section footer-bottom"><span>© {new Date().getFullYear()} ツギココ</span><span className="preview-label"><span />プレビュー版</span></div>
       </footer>
 

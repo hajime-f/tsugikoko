@@ -732,3 +732,25 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 .milestone-notice > button:hover { background: #eee9d4; }
 .milestone-notice .milestone-error { color: #9c352f; font-size: 12px; margin-top: 8px; }
 @media (max-width: 700px) { .milestone-notice { right: 16px; bottom: calc(12px + env(safe-area-inset-bottom)); padding-block: 18px; } }
+
+
+/* ログイン不要のポリシー・削除案内 */
+.policy-page { min-height: 100vh; background: #f8f7f2; color: var(--ink); }
+.policy-header, .policy-content, .policy-footer { width: min(100% - 40px, 800px); margin-inline: auto; }
+.policy-header { padding-block: 28px; font-size: 22px; font-weight: 800; }
+.policy-content { padding: 32px 40px; background: #fff; border: 1px solid var(--line); border-radius: 20px; overflow-wrap: anywhere; line-height: 1.9; }
+.policy-content h1 { font-size: clamp(24px, 5vw, 32px); line-height: 1.5; margin: 0 0 12px; }
+.policy-content h2 { font-size: 20px; line-height: 1.6; margin: 0 0 14px; }
+.policy-content section { margin-top: 36px; }
+.policy-content p { margin-block: 14px; }
+.policy-content ul, .policy-content ol { padding-left: 1.5em; }
+.policy-content ul { list-style: disc; }
+.policy-content ol { list-style: decimal; }
+.policy-content li { margin-block: 12px; }
+.policy-content a:not(.button), .policy-footer a, .auth-footnote a { text-decoration: underline; text-underline-offset: 3px; }
+.policy-date { color: var(--muted); font-size: 13px; }
+.policy-footer { display: flex; flex-wrap: wrap; gap: 16px 24px; padding-block: 28px 40px; font-size: 14px; }
+@media (max-width: 700px) {
+  .policy-content { padding: 24px 20px; }
+  .policy-content h2 { font-size: 18px; }
+}

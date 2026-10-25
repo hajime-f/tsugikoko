@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { getAdditionalUserInfo, linkWithPopup, onAuthStateChanged, signInWithPopup, signOut, unlink, type User } from "firebase/auth";
+import { getAdditionalUserInfo, linkWithPopup, onAuthStateChanged, reauthenticateWithPopup, signInWithPopup, signOut, unlink, type User } from "firebase/auth";
 import { getClientAuth } from "@/lib/firebase/client";
 import { authErrorMessage, createProvider, isProviderEnabled, type ProviderId } from "@/lib/auth/providers";
 import { claimPendingDraft, clearDraft } from "@/lib/auth/draft";
@@ -14,6 +14,7 @@ type AuthContextValue = {
   logout: () => Promise<boolean>;
   link: (id: ProviderId) => Promise<boolean>;
   unlinkProvider: (id: ProviderId) => Promise<boolean>;
+  reauthenticate: (id: ProviderId) => Promise<boolean>;
 };
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -72,6 +73,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentUser = getClientAuth().currentUser;
       if (!currentUser || currentUser.providerData.length < 2) throw { code: "auth/operation-not-allowed" };
       await unlink(currentUser, id);
+    }),
+    reauthenticate: (id) => perform(async () => {
+      const currentUser = getClientAuth().currentUser;
+      if (!currentUser || !isProviderEnabled(id) || !currentUser.providerData.some(provider => provider.providerId === id)) throw { code: "auth/operation-not-allowed" };
+      await reauthenticateWithPopup(currentUser, createProvider(id));
+      await currentUser.getIdToken(true);
     }),
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,6 +2,51 @@ import { expect, test } from "@playwright/test";
 
 import { providerLogin } from "./helpers";
 
+test("退会は本人確認と最終確認を経て受け付け、キャンセル・通信失敗では保存リストを維持する", async ({ page, request }, info) => {
+  const email = `delete-${info.project.name}-${Date.now()}@example.test`;
+  const accounts = async () => (await (await request.get("http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/demo-tsugikoko/accounts:batchGet", { headers: { Authorization: "Bearer owner" } })).json()).users;
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", email);
+  await expect(page).toHaveURL(/\/home$/);
+  await page.getByLabel("登録するお店や投稿のURL").fill("https://www.instagram.com/p/deletiontest/");
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  await expect(page.locator("#my-places article")).toHaveCount(1);
+  await page.getByRole("button", { name: "アカウントを開く" }).click();
+  await page.getByRole("button", { name: "退会・データ削除", exact: true }).click();
+  await expect(page.getByRole("button", { name: "退会してデータを削除する", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "退会せずに戻る" }).click();
+  await expect(page.getByRole("dialog")).toContainText(email);
+  expect((await accounts()).find((user: { email: string }) => user.email === email).disabled ?? false).toBe(false);
+  await page.getByRole("button", { name: "退会・データ削除", exact: true }).click();
+  await providerLogin(page, "Googleで本人確認", `wrong-${email}`);
+  await expect(page.getByRole("alert")).toContainText("現在ログイン中のアカウント");
+  await expect(page.getByRole("button", { name: "退会してデータを削除する", exact: true })).toHaveCount(0);
+  await providerLogin(page, "Googleで本人確認", email);
+  await expect(page.getByText("本人確認が完了しました。")).toBeVisible();
+  const submit = page.getByRole("button", { name: "退会してデータを削除する", exact: true });
+  await expect(submit).toBeDisabled();
+  await page.getByRole("checkbox", { name: "保存データが削除され、元に戻せないことを理解しました" }).check();
+  await page.screenshot({ path: info.outputPath("deletion-confirm.png"), fullPage: true });
+  let attempts = 0;
+  await page.route("**/api/account/deletion", async route => {
+    expect(route.request().postDataJSON()).toEqual({ confirmation: "delete-account" });
+    attempts++;
+    if (attempts === 1) await route.fulfill({ status: 503, json: { error: "受付に接続できませんでした。" } });
+    else await route.continue();
+  });
+  await submit.click();
+  await expect(page.getByRole("alert")).toContainText("受付に接続できませんでした。");
+  expect((await accounts()).find((user: { email: string }) => user.email === email).disabled ?? false).toBe(false);
+  await expect(page.locator("#my-places article")).toHaveCount(1);
+  await submit.click();
+  await expect(page).toHaveURL(/\/data-deletion\?requested=1$/);
+  await expect(page.getByRole("heading", { name: "退会を受け付けました" })).toBeVisible();
+  expect(attempts).toBe(2);
+  expect((await accounts()).find((user: { email: string }) => user.email === email).disabled).toBe(true);
+  await page.goto("/home");
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 // このスイートは店舗/認証を検証する。推薦の集計と表示は recommendations.spec.ts で検証する。
 test.beforeEach(async ({ page, context }) => {
   await context.route(/https:\/\/[^/]*(?:googletagmanager|google-analytics)\.com\//, route => route.fulfill({ contentType: "application/javascript", body: "" }));

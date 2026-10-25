@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PrivacyDocument } from "@/components/privacy/privacy-document";
 import { SUPPORT_EMAIL } from "@/lib/site";
+import { DeletionReceipt } from "@/components/auth/deletion-receipt";
 
 export const metadata: Metadata = {
   title: "データの削除 | ツギココ",
@@ -12,8 +13,18 @@ export const metadata: Metadata = {
 export default function DataDeletionPage() {
   const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("ツギココのデータ削除依頼")}`;
   return <PrivacyDocument title="データの削除">
-    <p>ツギココのアカウントと保存データの削除は、メールで受け付けています。このページはログインせずに利用できます。</p>
-    <section><h2>削除を依頼する方法</h2>
+    <DeletionReceipt />
+    <p>ツギココのアカウントと保存データは、ログイン後のアカウント画面から削除できます。ログインできない場合などは、メールでも受け付けています。</p>
+    <section><h2>画面から退会する方法</h2>
+      <ol>
+        <li><a href="/home">ツギココにログイン</a>し、「アカウント」から「退会・データ削除」を開きます。</li>
+        <li>削除対象を確認し、連携済みのログイン方法で本人確認を行います。この操作だけでは退会しません。</li>
+        <li>最終確認のチェックを入れ、「退会してデータを削除する」を押します。</li>
+        <li>受付後はログアウトし、数分後から順次削除します。ブラウザーを閉じても処理は続きます。受付後の取り消しはできません。</li>
+      </ol>
+      <p>処理が混み合う場合や再試行が必要な場合は時間がかかります。受付結果や処理状況が分からない場合は、下記の窓口へお問い合わせください。</p>
+    </section>
+    <section><h2>メールで削除を依頼する方法</h2>
       <ol>
         <li><a href={mailto}>{SUPPORT_EMAIL}</a> に、件名「ツギココのデータ削除依頼」でメールを送ってください。</li>
         <li>利用していたログイン方法（Google・X・Facebookなど）、登録メールアドレス、削除したい内容（アカウント全体、特定の情報など）を記載してください。登録メールアドレスが分からない・提供されていない場合は、その旨を記載してください。</li>

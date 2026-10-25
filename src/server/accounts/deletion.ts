@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { adminAuth, database } from "@/server/firebase/admin";
 
-// 運営者のCLI専用。HTTPエンドポイントとして公開しない。
+// 管理用CLIと、認証・本人確認済みの退会受付から使用する。UIDをクライアント入力から取得しない。
 export const DELETION_DRAIN_MS = 5 * 60_000;
 const validUid = (uid: string) => {
   if (!/^[A-Za-z0-9:_-]{1,128}$/.test(uid)) throw new Error("Invalid account UID");
@@ -29,18 +29,21 @@ export async function inspectAccountDeletion(uid: string) {
     readyToDelete: job.exists && Date.now() - job.get("preparedAt") >= DELETION_DRAIN_MS && (!user || user.disabled) };
 }
 
-// 本人確認・削除範囲の合意は運営者が先に行う。既存のAPIは失効とdisabledを確認して拒否する。
+// 呼び出し元で本人確認・削除範囲の合意を済ませる。既存APIは失効とdisabledを確認して拒否する。
 export async function prepareAccountDeletion(uid: string) {
   const user = await authUser(uid);
   const ref = jobRef(uid), job = await ref.get();
   if (!user) {
-    if (job.exists) return; // 前回の削除がAuth削除後に中断した場合も再開できる。
+    if (job.exists) {
+      if (typeof job.get("preparedAt") !== "number") await ref.set({ preparedAt: Date.now() }, { merge: true });
+      return; // 前回の削除がAuth削除後に中断した場合も再開できる。
+    }
     throw new Error("Account not found; verify the target before proceeding");
   }
   await adminAuth().updateUser(uid, { disabled: true });
   await adminAuth().revokeRefreshTokens(uid);
   // 進行中リクエストを待つ。手動で再有効化されていた場合は待機時間を取り直す。
-  if (!job.exists || !user.disabled) await ref.set({ preparedAt: Date.now() });
+  if (typeof job.get("preparedAt") !== "number" || !user.disabled) await ref.set({ preparedAt: Date.now() }, { merge: true });
 }
 
 export async function deletePreparedAccount(uid: string) {

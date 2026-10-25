@@ -6,11 +6,20 @@ import { ZodError } from "zod";
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
-export async function authenticatedUid(request: Request) {
+export async function authenticatedUser(request: Request) {
   const token = request.headers.get("authorization")?.match(/^Bearer (\S+)$/)?.[1];
   if (!token || token.length > 8192) throw new ApiError(401, "ログインし直してください。");
-  try { return (await adminAuth().verifyIdToken(token, true)).uid; }
+  try { return await adminAuth().verifyIdToken(token, true); }
   catch { throw new ApiError(401, "ログインし直してください。"); }
+}
+export async function authenticatedUid(request: Request) {
+  return (await authenticatedUser(request)).uid;
+}
+export async function recentlyAuthenticatedUid(request: Request) {
+  const user = await authenticatedUser(request);
+  const age = Date.now() / 1000 - user.auth_time;
+  if (!Number.isFinite(age) || age < -60 || age > 5 * 60) throw new ApiError(401, "もう一度本人確認を行ってください。");
+  return user.uid;
 }
 // Cloud Tasks・Cloud Schedulerからの呼び出しを、指定したサービスアカウントのOIDCトークンで確認する。
 export async function verifyServiceRequest(request: Request, audience: string, invoker: string) {

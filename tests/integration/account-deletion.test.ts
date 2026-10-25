@@ -6,8 +6,77 @@ import { authenticatedUid } from "../../src/server/auth/request";
 import { DELETION_DRAIN_MS, deletePreparedAccount, inspectAccountDeletion, prepareAccountDeletion } from "../../src/server/accounts/deletion";
 import { listRecommendations } from "../../src/server/recommendations/service";
 import { createPlace, processExtraction } from "../../src/server/places/service";
+import { requestAccountDeletion, processAccountDeletion } from "../../src/server/accounts/dispatch";
+import { POST as requestDeletion } from "../../src/app/api/account/deletion/route";
+import { POST as deletionWorker } from "../../src/app/api/internal/account-deletion/route";
 
 if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.GCLOUD_PROJECT !== "demo-tsugikoko" || process.env.FIREBASE_AUTH_EMULATOR_HOST !== "127.0.0.1:9099") throw new Error("Local demo emulators required");
+
+test("退会APIは本人の直近認証と確認を必須にし、待機後のジョブで本人だけを削除する", async () => {
+  const db = database(), uid = `self-${randomUUID()}`, other = `other-${randomUUID()}`;
+  await adminAuth().createUser({ uid });
+  await adminAuth().createUser({ uid: other });
+  await db.doc(`users/${uid}/savedPlaces/self`).set({ note: "本人" });
+  await db.doc(`users/${other}/savedPlaces/other`).set({ note: "他人" });
+  const response = await fetch("http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=test", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: await adminAuth().createCustomToken(uid), returnSecureToken: true }),
+  });
+  assert.equal(response.status, 200);
+  const { idToken } = await response.json() as { idToken: string };
+  const request = (body: unknown, token = idToken) => new Request("http://localhost/api/account/deletion", {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body),
+  });
+  assert.equal((await requestDeletion(request({ confirmation: "delete-account" }, "invalid"))).status, 401);
+  assert.equal((await requestDeletion(request({ confirmation: "delete-account", uid: other }))).status, 400);
+  assert.equal((await requestDeletion(request({}))).status, 400);
+  // エミュレーターの署名なしトークンだけを編集して、期限切れの本人確認を再現する。
+  const parts = idToken.split(".");
+  const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+  payload.auth_time = Math.floor(Date.now() / 1000) - 600;
+  parts[1] = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  assert.equal((await requestDeletion(request({ confirmation: "delete-account" }, parts.join(".")))).status, 401);
+  assert.equal((await adminAuth().getUser(uid)).disabled, false);
+  assert.equal((await db.doc(`accountDeletions/${uid}`).get()).exists, false);
+  assert.equal((await deletionWorker(request({ uid, requestId: randomUUID() }))).status, 401);
+  const accepted = await requestDeletion(request({ confirmation: "delete-account" }));
+  assert.equal(accepted.status, 202);
+  assert.deepEqual(await accepted.json(), { accepted: true });
+  const job = await db.doc(`accountDeletions/${uid}`).get(), requestId = job.get("requestId");
+  assert.equal(typeof requestId, "string");
+  assert.equal((await adminAuth().getUser(uid)).disabled, true);
+  assert.equal(await processAccountDeletion(uid, randomUUID()), "done");
+  assert.equal(await processAccountDeletion(uid, requestId), "waiting");
+  assert.equal((await db.doc(`users/${uid}/savedPlaces/self`).get()).exists, true);
+  await db.doc(`accountDeletions/${uid}`).update({ preparedAt: Date.now() - DELETION_DRAIN_MS - 1 });
+  assert.equal(await processAccountDeletion(uid, requestId), "done");
+  assert.equal(await processAccountDeletion(uid, requestId), "done");
+  assert.equal((await db.doc(`users/${uid}`).listCollections()).length, 0);
+  await assert.rejects(adminAuth().getUser(uid), { code: "auth/user-not-found" });
+  assert.equal((await db.doc(`users/${other}/savedPlaces/other`).get()).get("note"), "他人");
+  assert.equal((await adminAuth().getUser(other)).disabled, false);
+});
+
+test("キュー登録失敗では停止せず、受付後の停止失敗はジョブが再開し、二重受付は元のジョブを維持する", async () => {
+  const db = database(), uid = `dispatch-${randomUUID()}`;
+  await adminAuth().createUser({ uid });
+  await assert.rejects(requestAccountDeletion(uid, async () => { throw new Error("Queue unavailable"); }), /Queue unavailable/);
+  assert.equal((await adminAuth().getUser(uid)).disabled, false);
+  assert.equal((await db.doc(`accountDeletions/${uid}`).get()).exists, false);
+  const original = adminAuth().updateUser.bind(adminAuth());
+  adminAuth().updateUser = async () => { throw new Error("Temporary auth failure"); };
+  try { assert.deepEqual(await requestAccountDeletion(uid), { accepted: true }); }
+  finally { adminAuth().updateUser = original; }
+  const job = await db.doc(`accountDeletions/${uid}`).get(), requestId = job.get("requestId");
+  assert.equal(job.get("preparedAt"), undefined);
+  assert.equal(await processAccountDeletion(uid, requestId), "waiting");
+  const preparedAt = (await db.doc(`accountDeletions/${uid}`).get()).get("preparedAt");
+  await requestAccountDeletion(uid);
+  const retried = await db.doc(`accountDeletions/${uid}`).get();
+  assert.equal(retried.get("requestId"), requestId);
+  assert.equal(retried.get("preparedAt"), preparedAt);
+  await db.doc(`accountDeletions/${uid}`).update({ preparedAt: Date.now() - DELETION_DRAIN_MS - 1 });
+  assert.equal(await processAccountDeletion(uid, requestId), "done");
+});
 
 test("削除前の本人確認用調査は書き込まず、停止・待機後に本人の認証と全階層の記録だけを削除する", async () => {
   const db = database(), uid = `delete-${randomUUID()}`, other = `keep-${randomUUID()}`;

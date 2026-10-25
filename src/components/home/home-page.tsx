@@ -1,5 +1,6 @@
 "use client";
 
+import { AccountDeletionPanel } from "@/components/auth/account-deletion-panel";
 import { AnalyticsPrivacy } from "@/components/analytics/analytics-privacy";
 
 import { HeroImage } from "@/components/ui/hero-image";
@@ -27,12 +28,12 @@ function UserAvatar({ photoURL, initial }: { photoURL: string | null; initial: s
 export function HomePage() {
   const auth = useAuth();
   const router = useRouter();
-  const [modal, setModal] = useState<"account" | "guide" | "recommendations" | "privacy" | null>(null);
+  const [modal, setModal] = useState<"account" | "guide" | "recommendations" | "privacy" | "delete" | null>(null);
   const [unlinkId, setUnlinkId] = useState<ProviderId | null>(null);
   const [pendingDraft, setPendingDraft] = useState<{ uid: string; url: string } | null>(null);
   const [accountNotice, setAccountNotice] = useState("");
   const [greeting, setGreeting] = useState("");
-  const loggingOut = useRef(false);
+  const logoutDestination = useRef<string | null>(null);
   const [placesRevision, setPlacesRevision] = useState(0);
   const [recommendationsRevision, setRecommendationsRevision] = useState(0);
   const [milestoneRevision, setMilestoneRevision] = useState(0);
@@ -54,7 +55,7 @@ export function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!auth.loading && !auth.user) router.replace(loggingOut.current ? "/" : "/login");
+    if (!auth.loading && !auth.user) router.replace(logoutDestination.current ?? "/login");
   }, [auth.loading, auth.user, router]);
   const uid = auth.user?.uid;
   useEffect(() => { setPendingDraft(uid ? { uid, url: readDraft(uid) } : null); }, [uid]);
@@ -113,7 +114,19 @@ export function HomePage() {
           <h3 className="account-heading">おすすめ</h3><button className="text-button" onClick={() => setModal("recommendations")}>おすすめの利用方針・興味なしの管理<ChevronRight size={16} /></button>
           <h3 className="account-heading">プライバシー</h3><button className="text-button" onClick={() => setModal("privacy")}>利用状況の集計・アクセス解析<ChevronRight size={16} /></button>
           <p className="auth-footnote"><a href="/terms">利用規約</a>・<a href="/privacy">プライバシーポリシー</a>・<a href="/data-deletion">データの削除を依頼する</a></p>
-          <button className="logout-button" disabled={auth.busy} onClick={async () => { loggingOut.current = true; if (await auth.logout()) router.replace("/"); else loggingOut.current = false; }}>{auth.busy ? <LoaderCircle size={18} className="spinning" /> : <LogOut size={18} />}ログアウト</button>
+          <button className="text-button account-delete-link" disabled={auth.busy} onClick={() => { auth.clearError(); setModal("delete"); }}>退会・データ削除<ChevronRight size={16} /></button>
+          <button className="logout-button" disabled={auth.busy} onClick={async () => { logoutDestination.current = "/"; if (await auth.logout()) router.replace("/"); else logoutDestination.current = null; }}>{auth.busy ? <LoaderCircle size={18} className="spinning" /> : <LogOut size={18} />}ログアウト</button>
+        </> : modal === "delete" ? <>
+          <DialogTitle className="dialog-title">退会・データ削除</DialogTitle>
+          <DialogDescription className="dialog-description">本人確認と最終確認の後に、退会を受け付けます。</DialogDescription>
+          <AccountDeletionPanel onCancel={openAccount} onAccepted={async () => {
+            logoutDestination.current = "/data-deletion?requested=1";
+            if (await auth.logout()) router.replace(logoutDestination.current);
+            else {
+              logoutDestination.current = null;
+              throw new Error("Sign out failed");
+            }
+          }} />
         </> : modal === "privacy" ? <>
           <DialogTitle className="dialog-title">利用状況の集計・アクセス解析</DialogTitle><DialogDescription className="dialog-description">サービス改善のために利用する情報と、アクセス解析の設定です。</DialogDescription>
           <AnalyticsPrivacy />

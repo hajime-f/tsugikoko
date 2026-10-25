@@ -28,6 +28,19 @@ env:
   - variable: PLACE_TASKS_URL
     value: "https://tsugikoko--tsugikoko.asia-east1.hosted.app/api/internal/place-extraction"
     availability: [RUNTIME]
+  # 退会後の削除。専用キューで待機・再試行し、ブラウザーを閉じても継続する。
+  - variable: ACCOUNT_DELETION_ENABLED
+    value: "true"
+    availability: [RUNTIME]
+  - variable: ACCOUNT_DELETION_QUEUE
+    value: "projects/tsugikoko/locations/asia-east1/queues/account-deletion"
+    availability: [RUNTIME]
+  - variable: ACCOUNT_DELETION_INVOKER
+    value: "place-tasks-invoker@tsugikoko.iam.gserviceaccount.com"
+    availability: [RUNTIME]
+  - variable: ACCOUNT_DELETION_URL
+    value: "https://tsugikoko--tsugikoko.asia-east1.hosted.app/api/internal/account-deletion"
+    availability: [RUNTIME]
   # 日次集計。Cloud Schedulerが毎日呼び出し、BigQueryのanalytics.daily_metricsへ件数だけを書き込む。
   - variable: METRICS_ENABLED
     value: "true"

@@ -27,6 +27,7 @@ export function createProvider(id: ProviderId) {
 export function authErrorMessage(error: unknown) {
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   switch (code) {
+    case "auth/user-mismatch": return "現在ログイン中のアカウントを選んで、本人確認をやり直してください。";
     case "auth/popup-closed-by-user": return "ログインをキャンセルしました。もう一度お試しいただけます。";
     case "auth/cancelled-popup-request": return "開いているログイン画面で操作を続けてください。";
     case "auth/popup-blocked": return "ログイン画面を開けませんでした。このサイトのポップアップを許可して、もう一度お試しください。SNS内のブラウザでは、SafariやChromeで開き直してください。";

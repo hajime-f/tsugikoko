@@ -8,6 +8,8 @@ import { MAX_VISITS, sortVisits, sourceLabel, type PlaceListQuery, type SavedPla
 import { extractionTarget, fetchPageFacts, type PageFetcher } from "@/server/extraction/sources";
 import { factsSchema } from "@/server/extraction/parser";
 import { genreFromText, normalizeGenre, type Genre } from "@/lib/places/genres";
+import { activeListIds, collectionsOf, collectionsRef, getCollections } from "./collections";
+import type { PlaceCollection } from "@/lib/places/schema";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const records = (uid: string) => database().collection("users").doc(uid).collection("savedPlaces");
@@ -34,6 +36,7 @@ function publicRecord(id: string, data: FirebaseFirestore.DocumentData): SavedPl
     fetchedAt: data.fetchedAt, createdAt: data.createdAt, updatedAt: data.updatedAt,
     lastAttemptAt: data.lastAttemptAt, deleted: data.deleted, deleteAt: data.deleteAt, visibility: "private",
     visitCount: data.visitCount ?? 0, latestVisit: data.latestVisit ?? null,
+    listIds: data.listIds ?? [],
     // 本人が選んだジャンル（未設定を含む）は店名からの推測で置き換えない。
     genre: normalizeGenre(data.genre) ?? ((data.editedFields ?? []).includes("genre") ? null : genreFromText(data.name ?? "")),
   };
@@ -117,12 +120,12 @@ export async function saveCommonPlace(uid: string, common: { id: string; name: s
   });
 }
 
-type PlaceFilters = Pick<PlaceListQuery, "q" | "genre" | "sort">;
+type PlaceFilters = Pick<PlaceListQuery, "q" | "genre" | "sort"> & { list?: string };
 const PAGE_SIZE = 30;
 const collator = new Intl.Collator("ja", { sensitivity: "base", numeric: true });
 const searchable = (text: string) => text.normalize("NFKC").toLowerCase();
 // 一覧に必要な項目だけを読み、訪問履歴の本文は読まない。
-const listFields = ["placeId", "url", "sourceUrls", "name", "address", "note", "customDetails", "extraction", "reason", "sourceLabel", "fetchedAt", "createdAt", "updatedAt", "lastAttemptAt", "deleted", "deleteAt", "visitCount", "latestVisit", "genre", "editedFields"];
+const listFields = ["placeId", "url", "sourceUrls", "name", "address", "note", "customDetails", "extraction", "reason", "sourceLabel", "fetchedAt", "createdAt", "updatedAt", "lastAttemptAt", "deleted", "deleteAt", "visitCount", "latestVisit", "genre", "editedFields", "listIds"];
 const filterCursorSchema = z.object({ n: z.string().max(120), c: z.number().int().nonnegative(), i: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 type SortKey = z.infer<typeof filterCursorSchema>;
 
@@ -134,18 +137,22 @@ function compareBy(sort: PlaceFilters["sort"]) {
 }
 
 // Firestoreは部分一致検索・任意の照合順を扱えないため、本人の該当状態の記録を全件読み込んでから絞り込む。
-async function searchPlaces(uid: string, trash: boolean, cursor: string | null, status: PlaceListQuery["status"], filters: PlaceFilters) {
+async function searchPlaces(uid: string, trash: boolean, cursor: string | null, status: PlaceListQuery["status"], filters: PlaceFilters, lists: PlaceCollection[]) {
   let after: SortKey | null = null;
   if (cursor) {
     try { after = filterCursorSchema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"))); }
     catch { throw new ApiError(400, "一覧の続きが読み込めません。画面を再読み込みしてください。"); }
   }
   const terms = searchable(filters.q).split(/\s+/).filter(Boolean);
-  const snapshot = await records(uid).where("deleted", "==", trash).select(...listFields).get();
+  let query = records(uid).where("deleted", "==", trash);
+  if (filters.list && !["all", "unfiled"].includes(filters.list)) query = query.where("listIds", "array-contains", filters.list);
+  const snapshot = await query.select(...listFields).get();
   const key = (place: SavedPlace): SortKey => ({ n: place.name ?? "", c: place.createdAt, i: place.id });
   const compare = compareBy(filters.sort);
   const matched = snapshot.docs.map((doc) => publicRecord(doc.id, doc.data())).filter((place) => {
     if (expired(place)) return false;
+    place.listIds = activeListIds(place.listIds, lists);
+    if (filters.list === "unfiled" && place.listIds.length) return false;
     if (!trash && status !== "all" && (status === "visited") !== (place.visitCount > 0)) return false;
     if (filters.genre !== "all" && place.genre !== (filters.genre === "unset" ? null : filters.genre)) return false;
     const text = [place.name, place.address, place.note].map((value) => searchable(value ?? ""));
@@ -159,8 +166,13 @@ async function searchPlaces(uid: string, trash: boolean, cursor: string | null, 
 }
 
 export async function listPlaces(uid: string, trash: boolean, cursor: string | null, status: PlaceListQuery["status"] = "all", filters: PlaceFilters = { q: "", genre: "all", sort: "newest" }) {
-  if (filters.q || filters.genre !== "all" || filters.sort !== "newest") return searchPlaces(uid, trash, cursor, status, filters);
-  let query = records(uid).where("deleted", "==", trash).orderBy("createdAt", "desc").orderBy(FieldPath.documentId(), "desc").limit(31);
+  const lists = await getCollections(uid);
+  const selected = filters.list && !["all", "unfiled"].includes(filters.list) ? filters.list : null;
+  if (selected && !lists.some(list => list.id === selected)) throw new ApiError(404, "リストが削除されています。「すべてのお店」に切り替えてください。");
+  if (filters.q || filters.genre !== "all" || filters.sort !== "newest" || filters.list === "unfiled") return searchPlaces(uid, trash, cursor, status, filters, lists);
+  let base = records(uid).where("deleted", "==", trash);
+  if (selected) base = base.where("listIds", "array-contains", selected);
+  let query = base.orderBy("createdAt", "desc").orderBy(FieldPath.documentId(), "desc").limit(31);
   if (cursor) {
     const match = cursor.match(/^(\d{13}):([a-f0-9]{64})$/);
     if (!match) throw new ApiError(400, "一覧の続きが読み込めません。画面を再読み込みしてください。");
@@ -170,7 +182,7 @@ export async function listPlaces(uid: string, trash: boolean, cursor: string | n
   const docs = snapshot.docs.slice(0, 30);
   // 旧データには訪問件数がないため、移行不要で読めるよう取得した30件を分類する。
   // 空ページにも次カーソルを返し、クライアントが続きの範囲を遅延取得する。
-  const places = docs.map((doc) => publicRecord(doc.id, doc.data())).filter((place) => !expired(place) &&
+  const places = docs.map((doc) => { const place = publicRecord(doc.id, doc.data()); return { ...place, listIds: activeListIds(place.listIds, lists) }; }).filter((place) => !expired(place) &&
     (trash || status === "all" || (status === "visited" ? place.visitCount > 0 : place.visitCount === 0)));
   const last = docs.at(-1);
   return { places, nextCursor: snapshot.size > 30 && last ? `${last.get("createdAt")}:${last.id}` : null };
@@ -328,6 +340,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
       if (!current.exists || current.get("deleted") || current.get("extraction") !== "pending" || current.get("attemptId") !== attemptId) return;
       const otherRef = key.exists && key.get("id") !== id ? records(uid).doc(key.get("id")) : null;
       const other = otherRef ? await tx.get(otherRef) : null;
+      const lists = other?.exists ? collectionsOf(await tx.get(collectionsRef(uid))) : [];
       tx.set(cacheRef, { ...facts, fetchedAt, placeId, provenance });
       tx.set(database().doc(`places/${placeId}`), { ...facts, provenance }, { merge: true });
       const otherActive = Boolean(other?.exists && !expired(publicRecord(other.id, other.data()!)));
@@ -344,6 +357,7 @@ export async function processExtraction(uid: string, id: string, options: { forc
             deleted: false, deleteAt: null, purgeAt: null, updatedAt: Date.now(),
             visits, ...visitSummary(visits),
             genre: mergedGenre(other!, current, facts.genre),
+            listIds: activeListIds([...(other!.get("listIds") ?? []), ...(current.get("listIds") ?? [])], lists),
           };
           // 統合先で本人が直した項目を優先し、統合元だけで直した項目を引き継ぐ。
           for (const field of ["name", "address"] as const) {

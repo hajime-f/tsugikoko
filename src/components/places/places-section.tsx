@@ -1,12 +1,13 @@
 "use client";
 
 import { SharePlaceButton } from "@/components/places/share-place-button";
+import { PlaceListsDialog } from "@/components/places/place-lists-dialog";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bookmark, Check, Coffee, ExternalLink, Link2, LoaderCircle, LockKeyhole, MapPin, Pencil, Plus, RotateCcw, Search, Star, Trash2, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { createPlaceSchema, type PlaceList, type PlaceListQuery, type SavedPlace } from "@/lib/places/schema";
+import { createPlaceSchema, type PlaceCollection, type PlaceList, type PlaceListQuery, type SavedPlace } from "@/lib/places/schema";
 
 import { VisitDialog } from "@/components/places/visit-dialog";
 import { MapAddressLink } from "@/components/ui/map-address-link";
@@ -36,9 +37,16 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
   const [query, setQuery] = useState("");
   const [genreFilter, setGenreFilter] = useState<PlaceListQuery["genre"]>("all");
   const [sort, setSort] = useState<PlaceListQuery["sort"]>("newest");
-  const filtered = Boolean(query || genreFilter !== "all");
+  const [listFilter, setListFilter] = useState("all");
+  const [collections, setCollections] = useState<PlaceCollection[]>([]);
+  const [collectionsError, setCollectionsError] = useState("");
+  const [listsDialog, setListsDialog] = useState<{ place: SavedPlace | null } | null>(null);
+  const [savedPlace, setSavedPlace] = useState<SavedPlace | null>(null);
+  const collectionsRequestVersion = useRef(0);
+  const filtered = Boolean(query || genreFilter !== "all" || listFilter !== "all");
   const searching = filtered || sort !== "newest";
-  const clearConditions = useCallback(() => { setSearchInput(""); setQuery(""); setGenreFilter("all"); setSort("newest"); }, []);
+  const fullScan = Boolean(query || genreFilter !== "all" || sort !== "newest" || listFilter === "unfiled");
+  const clearConditions = useCallback(() => { setSearchInput(""); setQuery(""); setGenreFilter("all"); setSort("newest"); setListFilter("all"); }, []);
   const [error, setError] = useState("");
   const [saveFailed, setSaveFailed] = useState(false);
   const [message, setMessage] = useState("");
@@ -66,9 +74,23 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "処理に失敗しました。もう一度お試しください。");
+    if (!response.ok) throw Object.assign(new Error(data.error || "処理に失敗しました。もう一度お試しください。"), { status: response.status });
     return data as T;
   }, [user]);
+
+  const receiveCollections = useCallback((lists: PlaceCollection[]) => {
+    collectionsRequestVersion.current++;
+    setCollections(lists); setCollectionsError("");
+    setListFilter(current => ["all", "unfiled"].includes(current) || lists.some(list => list.id === current) ? current : "all");
+  }, []);
+  const loadCollections = useCallback(async () => {
+    const version = ++collectionsRequestVersion.current;
+    try {
+      const result = await api<{ lists: PlaceCollection[] }>("/lists");
+      if (active.current && version === collectionsRequestVersion.current) receiveCollections(result.lists);
+    } catch { if (active.current && version === collectionsRequestVersion.current) setCollectionsError("リストを読み込めませんでした。"); }
+  }, [api, receiveCollections]);
+  useEffect(() => { void loadCollections(); }, [loadCollections]);
 
   const reload = useCallback(async (nextCursor: string | null = null, quiet = false) => {
     // 自動追加・定期更新を重ねず、明示的な更新は古い応答を無効にする。
@@ -89,6 +111,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
         if (query) params.set("q", query);
         if (genreFilter !== "all") params.set("genre", genreFilter);
         if (sort !== "newest") params.set("sort", sort);
+        if (listFilter !== "all") params.set("list", listFilter);
         if (pageCursor) params.set("cursor", pageCursor);
         const result = await api<PlaceList>(`?${params}`);
         if (!active.current || version !== requestVersion.current) return;
@@ -106,12 +129,13 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       setCursor(pageCursor);
     } catch (cause) {
       if (active.current && version === requestVersion.current) (nextCursor ? setPageError : setError)(cause instanceof Error && cause.name !== "TimeoutError" ? cause.message : "通信が途切れました。もう一度読み込んでください。");
+      if (active.current && version === requestVersion.current && cause instanceof Error && "status" in cause && cause.status === 404 && !["all", "unfiled"].includes(listFilter)) await loadCollections();
     } finally {
       if (active.current && version === requestVersion.current) {
         fetching.current = null; setLoading(false); setLoadingMore(false);
       }
     }
-  }, [api, tab, query, genreFilter, sort]);
+  }, [api, tab, query, genreFilter, sort, listFilter, loadCollections]);
 
   useEffect(() => {
     loadedPages.current = 1; setPlaces([]); setCursor(null); setPageError(""); setError(""); setLoadingMore(false);
@@ -133,14 +157,14 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
     return () => observer.disconnect();
   }, [cursor, loading, loadingMore, busy, pageError, tab, reload]);
   useEffect(() => {
-    if (searching) return; // 検索中の全件読み取りを画面復帰のたびに繰り返さない。
+    if (fullScan) return; // 検索中の全件読み取りを画面復帰のたびに繰り返さない。
     const onFocus = () => { if (document.visibilityState === "visible") void reload(null, true); };
     document.addEventListener("visibilitychange", onFocus);
     return () => document.removeEventListener("visibilitychange", onFocus);
-  }, [reload, searching]);
+  }, [reload, fullScan]);
   const pending = places.some((place) => place.extraction === "pending" && !place.deleted);
   useEffect(() => {
-    if (!pending || searching) return;
+    if (!pending || fullScan) return;
     let count = 0;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
@@ -148,7 +172,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       if (++count >= 40) window.clearInterval(timer);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [pending, reload, searching]);
+  }, [pending, reload, fullScan]);
 
   const perform = useCallback(async (action: () => Promise<void>, inModal = false) => {
     if (locked.current) return false;
@@ -170,6 +194,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       if (automatic) setMessage("ログイン前に入力したURLを保存しています...");
       const result = await api<{ place: SavedPlace; duplicate: boolean; restored: boolean }>("", { method: "POST", body: JSON.stringify(parsed.data) });
       if (!active.current) return;
+      setSavedPlace(result.place);
       setMessage(result.restored ? "ごみ箱からマイリストに戻しました。" : result.duplicate ? "このURLは登録済みです。保存済みのお店をご確認ください。" : automatic ? "ログイン前のURLを「行きたい」に保存しました。" : "「行きたい」に保存しました。");
       setUrl(""); onSaved();
       const destination = result.place.visitCount > 0 ? "visited" : "saved";
@@ -190,6 +215,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       await api(`/${place.id}`, { method: "PATCH", body: JSON.stringify({ action }) });
       if (!active.current) return;
       setModal(null); setMessage(action === "trash" ? "ごみ箱へ移しました。30日間は元に戻せます。" : "マイリストに戻しました。");
+      setSavedPlace(null);
       await reload();
     }, action === "trash");
   }
@@ -207,12 +233,21 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       <p className="register-support">店名・住所・ジャンルは、同じURLを保存する人の入力補助にも利用します。メモ・訪問記録・評価は非公開です。</p>
       <p className="register-support">同じURLの店舗情報があれば入力を補助します。対応ページでは店名・住所を自動で取得します。</p>
       <p className="places-message" role="status">{message}</p>
+      {savedPlace && <button type="button" className="text-button collection-after-save" disabled={busy} onClick={() => setListsDialog({ place: savedPlace })}>保存したお店をリストに追加</button>}
       {error && <div className="places-error" role="alert">{error}{saveFailed && <p>URLは入力欄に残しています。</p>}<button type="button" className="text-button" disabled={loading || busy} onClick={() => { if (saveFailed) void registerUrl(url); else void reload(); }}>{saveFailed ? "保存を再試行" : "一覧を再読み込み"}</button></div>}
     </section>
 
     <section className="my-places-section" id="my-places" aria-labelledby="my-places-title">
       <div className="places-toolbar">
       <div className="member-section-heading"><div><p className="eyebrow section-eyebrow">YOUR LITTLE COLLECTION.</p><h2 id="my-places-title">あなたのマイリスト</h2></div><div className="places-toolbar-actions"><a className="places-add" href="#add-place" aria-label="お店を登録する" onClick={() => sourceInput.current?.focus()}><Plus size={20} /></a><button className="text-button trash-toggle" aria-label={tab === "trash" ? "マイリストに戻る" : "ごみ箱"} disabled={busy} onClick={() => setTab(tab === "trash" ? "saved" : "trash")}><Trash2 size={17} /><span>{tab === "trash" ? "マイリストに戻る" : "ごみ箱"}</span></button></div></div>
+      <div className="collection-toolbar">
+        <div><label htmlFor="place-list-filter">リスト</label><select id="place-list-filter" value={listFilter} disabled={busy} onFocus={() => void loadCollections()} onChange={event => setListFilter(event.target.value)}>
+          <option value="all">すべてのお店</option><option value="unfiled">未分類</option>
+          {collections.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
+        </select></div>
+        <button type="button" className="button button-login" disabled={busy} onClick={() => setListsDialog({ place: null })}>リスト管理</button>
+      </div>
+      {collectionsError && <p className="places-error" role="alert">{collectionsError}<button type="button" className="text-button" onClick={() => void loadCollections()}>リストを再読み込み</button></p>}
       <form className="place-search" role="search" aria-label="マイリストを検索" onSubmit={event => {
         event.preventDefault(); const next = searchInput.trim();
         if (next === query) void reload(); else setQuery(next);
@@ -227,7 +262,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
         </select></div>
         <div><label htmlFor="place-sort">並べ替え</label><select id="place-sort" value={sort} disabled={busy} onChange={event => setSort(event.target.value === "name" ? "name" : "newest")}><option value="newest">登録が新しい順</option><option value="name">店名順</option></select></div>
       </div>
-      {(searching || searchInput) && <div className="place-filter-summary"><p>{query && <span>「{query}」</span>}{genreFilter !== "all" && <span>{genreFilter === "unset" ? "ジャンル未設定" : genres[genreFilter].label}</span>}{sort === "name" && <span>店名順</span>}</p><button className="text-button" type="button" disabled={busy} onClick={clearConditions}>条件をクリア</button></div>}
+      {(searching || searchInput) && <div className="place-filter-summary"><p>{listFilter !== "all" && <span>{listFilter === "unfiled" ? "未分類" : collections.find(list => list.id === listFilter)?.name}</span>}{query && <span>「{query}」</span>}{genreFilter !== "all" && <span>{genreFilter === "unset" ? "ジャンル未設定" : genres[genreFilter].label}</span>}{sort === "name" && <span>店名順</span>}</p><button className="text-button" type="button" disabled={busy} onClick={clearConditions}>条件をクリア</button></div>}
       {tab !== "trash" ? <div className="place-tabs" role="tablist" aria-label="店舗の状態">
         <button disabled={busy} role="tab" id="saved-tab" aria-selected={tab === "saved"} aria-controls="places-panel" tabIndex={tab === "saved" ? 0 : -1} onClick={() => setTab("saved")} onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "End"].includes(event.key)) { event.preventDefault(); setTab("visited"); document.getElementById("visited-tab")?.focus(); } }}><Bookmark size={18} />行きたい</button>
         <button disabled={busy} role="tab" id="visited-tab" aria-selected={tab === "visited"} aria-controls="places-panel" tabIndex={tab === "visited" ? 0 : -1} onClick={() => setTab("visited")} onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) { event.preventDefault(); setTab("saved"); document.getElementById("saved-tab")?.focus(); } }}><Check size={18} />訪問済み</button>
@@ -235,7 +270,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       </div>
       <div role={tab === "trash" ? "region" : "tabpanel"} id="places-panel" aria-labelledby={tab === "trash" ? "my-places-title" : `${tab}-tab`} tabIndex={0} aria-busy={loading || loadingMore}>
         {loading && !places.length ? <p className="places-loading" role="status"><LoaderCircle size={20} className="spinning" />マイリストを読み込んでいます...</p>
-          : filtered && !places.length && !error && !cursor ? <div className="places-search-empty" role="status"><Search size={28} aria-hidden="true" /><h3>条件に合うお店が見つかりませんでした。</h3><p>検索する言葉やジャンルを変えてお試しください。</p><button className="text-button" disabled={busy} onClick={clearConditions}>検索・絞り込みを解除</button></div>
+          : filtered && !places.length && !error && !cursor ? <div className="places-search-empty" role="status"><Search size={28} aria-hidden="true" /><h3>条件に合うお店が見つかりませんでした。</h3><p>検索する言葉・ジャンル・リストを変えてお試しください。</p><button className="text-button" disabled={busy} onClick={clearConditions}>検索・絞り込みを解除</button></div>
           : !places.length && !error && !cursor ? <div className="places-empty"><div className="empty-illustration" aria-hidden="true"><span className="empty-circle" /><span className="empty-paper"><Coffee size={38} strokeWidth={1.3} /><i /><i /></span><span className="empty-pin"><Bookmark size={22} /></span></div><div className="empty-copy"><h3>{tab === "trash" ? "ごみ箱は空です。" : tab === "visited" ? "「行ってよかった」を、残そう。" : "最初の「行きたい」を、ここに。"}</h3><p>{tab === "trash" ? "削除した記録は、ここから元に戻せます。" : tab === "visited" ? "行きたいリストのお店から、訪問日や星の評価を残せます。" : "お店の公式サイトや、SNSで見つけた投稿。\n気になるURLから、リストをはじめましょう。"}</p>{tab === "visited" && <button className="text-button" onClick={() => setTab("saved")}>行きたいリストを見る</button>}{tab === "saved" && <a className="text-button" href="#add-place" onClick={() => sourceInput.current?.focus()}>URLを登録する<Plus size={16} /></a>}</div></div>
           : <div className="saved-place-grid">{places.map((place) => <article className="saved-place-card" data-tone={parseInt(place.id.slice(-4), 16) % 4} key={place.id} aria-label={place.name || `${place.sourceLabel}の保存URL`}>
             <div className="saved-place-top" data-genre={isGenre(place.genre) ? place.genre : undefined} data-genre-image={isGenre(place.genre) && genres[place.genre].image ? true : undefined}><PlaceArtwork id={place.id} genre={place.genre} /><span className="place-state">{place.deleted ? "ごみ箱" : place.visitCount > 0 ? "訪問済み" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>
@@ -244,6 +279,10 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
             {!place.name.trim() && !place.deleted && <p className="place-status-copy">{place.extraction === "pending" ? "URLは保存済みです。画面を閉じても取得処理は続きます。" : "URLは保存済みです。「編集」から店名・住所を入力できます。"}</p>}
             {place.latestVisit && <p className="place-visit-summary"><Star size={16} aria-hidden="true" /><span>{place.latestVisit.rating === null ? "未評価" : `${place.latestVisit.rating} / 5`}<small>直近の訪問 {place.latestVisit.visitedOn.replaceAll("-", "/")} · {place.visitCount}回訪問</small></span></p>}
             {place.note && <p className="place-note">{place.note}</p>}
+            <div className="place-collections">
+              {(place.listIds ?? []).filter(id => collections.some(list => list.id === id)).map(id => <span key={id}>{collections.find(list => list.id === id)!.name}</span>)}
+              {!place.deleted && <button className="text-button" disabled={busy} onClick={() => setListsDialog({ place })}>リストを選ぶ</button>}
+            </div>
             <div className="place-sources">{place.sourceUrls.map((source) => <a key={source} href={source} target="_blank" rel="noopener noreferrer" className="place-source"><span>{source === place.url ? place.sourceLabel : new URL(source).hostname}で見る<small>{source}</small></span><ExternalLink size={15} /></a>)}</div>
             <p className="place-date">{place.deleted ? `${new Date(place.deleteAt!).toLocaleDateString("ja-JP")}まで復元できます` : place.fetchedAt ? `店舗情報の取得: ${new Date(place.fetchedAt).toLocaleDateString("ja-JP")}` : `保存: ${new Date(place.createdAt).toLocaleDateString("ja-JP")}`}</p>
             <div className="place-visit-actions">{!place.deleted && <button className="button button-dark" disabled={busy} onClick={() => setVisitDialog({ place, mode: "add" })}><Check size={16} />{place.visitCount > 0 ? "再訪を記録" : "行ってきた"}</button>}{place.visitCount > 0 && <button className="text-button" disabled={busy} onClick={() => setVisitDialog({ place, mode: "history" })}>訪問履歴（{place.visitCount}）</button>}</div>
@@ -262,6 +301,10 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       </div>
     </section>
 
+    {listsDialog && <PlaceListsDialog key={listsDialog.place?.id ?? "manage"} place={listsDialog.place} api={api}
+      onClose={() => { setListsDialog(null); void reload(); }} onLists={receiveCollections}
+      onBusy={value => { locked.current = value; setBusy(value); }}
+      onSaved={() => { setMessage("所属リストを保存しました。"); onChanged?.(); }} />}
     {visitDialog && <VisitDialog key={visitDialog.place.id} place={visitDialog.place} initialMode={visitDialog.mode} api={api}
       onClose={() => setVisitDialog(null)} onBusy={setBusy} onChange={updated => {
         setVisitDialog(current => current ? { ...current, place: updated } : null);

@@ -5,6 +5,7 @@ import { database } from "../../src/server/firebase/admin";
 import { claimDispatch, createPlace, listPlaces, listVisits, processExtraction, updatePlace, updateVisit } from "../../src/server/places/service";
 import { extractionTarget, type PageFetcher } from "../../src/server/extraction/sources";
 import { normalizePlaceUrl } from "../../src/lib/places/schema";
+import { changeCollection, setMembership, getMembership } from "../../src/server/places/collections";
 
 if (process.env.FIRESTORE_EMULATOR_HOST !== "127.0.0.1:8080" || process.env.GCLOUD_PROJECT !== "demo-tsugikoko") throw new Error("Local demo emulator required");
 const today = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -75,6 +76,10 @@ test("異なるURLの同じ店舗は、メモと本人の修正を引き継い�
   await processExtraction(uid, first.id, { fetcher });
   await updatePlace(uid, first.id, { name: "統合カフェ", address: "東京都渋谷区恵比寿1-2-3", note: "最初のメモ" });
   const second = (await createPlace(uid, urlB)).place;
+  const listA = (await changeCollection(uid, { action: "create", name: "統合前A" })).list!;
+  const listB = (await changeCollection(uid, { action: "create", name: "統合前B" })).list!;
+  await setMembership(uid, first.id, { action: "setLists", listIds: [listA.id], expectedListIds: [] });
+  await setMembership(uid, second.id, { action: "setLists", listIds: [listA.id, listB.id], expectedListIds: [] });
   await updatePlace(uid, second.id, { name: "", address: "", note: "あとのメモ" });
   await updateVisit(uid, first.id, { action: "addVisit", visitId: randomUUID(), visitedOn: "2024-02-29", rating: 4, comment: "最初の訪問" });
   await updateVisit(uid, second.id, { action: "addVisit", visitId: randomUUID(), visitedOn: "2024-03-01", rating: 5, comment: "再訪の感想" });
@@ -88,6 +93,7 @@ test("異なるURLの同じ店舗は、メモと本人の修正を引き継い�
   assert.equal(merged.get("latestVisit.rating"), 5);
   assert.deepEqual((await listVisits(uid, first.id, null)).visits.map(visit => visit.comment), ["再訪の感想", "最初の訪問"]);
   assert.equal((await createPlace(uid, urlB)).place.id, first.id);
+  assert.deepEqual((await getMembership(uid, first.id)).listIds.sort(), [listA.id, listB.id].sort());
 });
 
 test("本人の再取得は元ページを読み直し、通常の取得は保存済みの結果を使う", async () => {

@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     const { status, ...filters } = placeListQuerySchema.parse({
       status: params.get("status") ?? undefined, q: params.get("q") ?? undefined,
       genre: params.get("genre") ?? undefined, sort: params.get("sort") ?? undefined,
+      list: params.get("list") ?? undefined,
     });
     const result = await listPlaces(uid, params.get("trash") === "1", params.get("cursor"), status, filters);
     const pending = result.places.filter((place) => place.extraction === "pending" && !place.deleted).slice(0, 3);

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
@@ -208,6 +208,8 @@ test("追加読み込み中にごみ箱へ切り替えても古い応答を混�
 });
 
 test("URL登録・重複防止・編集・再ログイン・ごみ箱を通して確認する", async ({ page }, info) => {
+  // URL共通情報が別テストの入力補助に混ざらないよう、実際の投稿IDを分離する。
+  const unsupported = `https://www.instagram.com/p/registration_${info.project.name}_${randomUUID()}/`;
   const email = `places-${info.project.name}-${Date.now()}@example.test`;
   await page.goto("/login");
   await providerLogin(page, "Googleでログイン", email);
@@ -356,6 +358,7 @@ test("自動補完の結果を保存し、未認証・他ユーザーのアク�
 });
 
 test("訪問と再訪を記録し、通信失敗の再試行・履歴の編集・削除・再読み込みを確認する", async ({ page }, info) => {
+  const unsupported = `https://www.instagram.com/p/visits_${info.project.name}_${randomUUID()}/`;
   await page.goto("/login");
   await providerLogin(page, "Googleでログイン", `visits-${info.project.name}-${Date.now()}@example.test`);
   await page.getByLabel("登録するお店や投稿のURL").fill(unsupported);
@@ -623,4 +626,165 @@ test("SNS共有は店名とURLだけを渡し、コピーと端末共有に対�
   await expect(siteDialog.getByRole("textbox", { name: "投稿内容" })).toHaveValue("気になったら、ツギココ。\nSNSやグルメサイトで見つけた行きたいお店を、ひとつのマイリストに。\nhttps://tsugikoko.com");
   await expect(siteDialog).not.toContainText(place.note);
   await expect(siteDialog).not.toContainText("テストユーザー");
+});
+
+test("用途別リストを作成し、複数所属・検索・名前変更・削除を使う", async ({ page }, info) => {
+  const email = `collections-${info.project.name}-${Date.now()}@example.test`;
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", email);
+  await page.getByLabel("登録するお店や投稿のURL").fill(`https://www.instagram.com/p/lists_${info.project.name}_${Date.now()}/`);
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  await page.getByRole("button", { name: "保存したお店をリストに追加", exact: true }).click();
+  const member = page.getByRole("dialog", { name: "所属リストを選ぶ" });
+  await expect(member.getByText("リストはまだありません。下の欄から作成できます。")).toBeVisible();
+  for (const name of ["京都旅行", "デート"]) {
+    await member.getByRole("textbox", { name: "新しいリストを作成" }).fill(name);
+    await member.getByRole("button", { name: "リストを作成", exact: true }).click();
+    await expect(member.getByRole("checkbox", { name })).toBeChecked();
+  }
+  await member.getByRole("button", { name: "所属を保存", exact: true }).click();
+  await expect(member).toHaveCount(0);
+  const card = page.getByRole("article").first();
+  await expect(card.locator(".place-collections")).toContainText("京都旅行");
+  await expect(card.locator(".place-collections")).toContainText("デート");
+  await card.getByRole("button", { name: "編集", exact: true }).click();
+  const edit = page.getByRole("dialog", { name: "お店の情報を編集" });
+  await edit.getByLabel("店名", { exact: true }).fill("京都のお気に入り");
+  await edit.getByLabel("自分用メモ").fill("窓際に座りたい");
+  await edit.getByRole("button", { name: "変更を保存", exact: true }).click();
+  await expect(edit).toHaveCount(0);
+  await page.getByLabel("リスト", { exact: true }).selectOption({ label: "京都旅行" });
+  const search = page.getByRole("search", { name: "マイリストを検索" });
+  await search.getByRole("searchbox").fill("窓際");
+  await search.getByRole("button", { name: "検索", exact: true }).click();
+  await expect(page.getByRole("article", { name: "京都のお気に入り", exact: true })).toHaveCount(1);
+  await page.getByRole("tab", { name: "訪問済み", exact: true }).click();
+  await expect(page.getByRole("article")).toHaveCount(0);
+  await page.getByRole("tab", { name: "行きたい", exact: true }).click();
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await page.getByRole("button", { name: "リスト管理", exact: true }).click();
+  const manager = page.getByRole("dialog", { name: "リスト管理" });
+  await manager.getByRole("button", { name: "京都旅行の名前を変更" }).click();
+  await manager.getByRole("textbox", { name: "新しいリスト名" }).fill("秋の京都");
+  await manager.getByRole("button", { name: "名前を保存", exact: true }).click();
+  await expect(manager.getByRole("button", { name: "秋の京都の名前を変更" })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("collection-manager.png"), animations: "disabled" });
+  await manager.getByRole("button", { name: "閉じる", exact: true }).last().click();
+  await expect(card.locator(".place-collections")).toContainText("秋の京都");
+  await card.getByRole("button", { name: "リストを選ぶ", exact: true }).click();
+  await expect(member.getByRole("checkbox", { name: "秋の京都" })).toBeChecked();
+  await member.getByRole("checkbox", { name: "デート", exact: true }).uncheck();
+  await member.getByRole("button", { name: "所属を保存", exact: true }).click();
+  await expect(card.locator(".place-collections")).not.toContainText("デート");
+  await page.getByRole("button", { name: "リスト管理", exact: true }).click();
+  await manager.getByRole("button", { name: "秋の京都のリストを削除" }).click();
+  await expect(manager.getByText("リストは元に戻せません。お店・メモ・訪問記録は残ります。")).toBeVisible();
+  await manager.getByRole("button", { name: "リストを削除する", exact: true }).click();
+  await expect(manager.getByRole("button", { name: "秋の京都の名前を変更" })).toHaveCount(0);
+  await manager.getByRole("button", { name: "閉じる", exact: true }).last().click();
+  await page.getByLabel("リスト", { exact: true }).selectOption("unfiled");
+  await expect(page.getByRole("article", { name: "京都のお気に入り", exact: true })).toContainText("窓際に座りたい");
+  await page.reload();
+  await expect(page.getByRole("article", { name: "京都のお気に入り", exact: true })).toBeVisible();
+  const database = db();
+  const { uid } = await getAuth(getApps()[0]).getUserByEmail(email);
+  expect((await database.collection(`users/${uid}/savedPlaces`).get()).size).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("リストの読み込み失敗を再試行し、別画面の所属変更を上書きしない", async ({ page }, info) => {
+  const email = `list-conflict-${info.project.name}-${Date.now()}@example.test`;
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", email);
+  await expect(page.getByRole("heading", { name: "あなたのマイリスト" })).toBeVisible();
+  const database = db(), { uid } = await getAuth(getApps()[0]).getUserByEmail(email);
+  const [place] = listFixtures(1), a = randomUUID(), b = randomUUID();
+  await database.doc(`users/${uid}/savedPlaces/${place.id}`).set({ ...place, listIds: [a] });
+  await database.doc(`users/${uid}/settings/placeLists`).set({ items: [a, b].map((id, i) => ({ id, name: i ? "旅行" : "仕事帰り", createdAt: Date.now(), updatedAt: Date.now() })) });
+  await page.reload();
+  let fail = true;
+  await page.route("**/api/places/lists?place=*", route => {
+    if (fail) { fail = false; return route.fulfill({ status: 503, json: { error: "一時的に接続できません。" } }); }
+    return route.continue();
+  });
+  await page.getByRole("article").getByRole("button", { name: "リストを選ぶ" }).click();
+  const dialog = page.getByRole("dialog", { name: "所属リストを選ぶ" });
+  await expect(dialog.getByRole("alert")).toContainText("一時的に接続できません。");
+  await expect(dialog.getByRole("button", { name: "所属を保存", exact: true })).toBeDisabled();
+  await dialog.getByRole("button", { name: "リストを読み直す" }).click();
+  await expect(dialog.getByRole("checkbox", { name: "仕事帰り" })).toBeChecked();
+  await dialog.getByRole("checkbox", { name: "旅行", exact: true }).check();
+  await page.route(/\/api\/places\/lists$/, route => route.request().method() === "POST"
+    ? route.fulfill({ status: 503, json: { error: "リスト作成に失敗しました。" } }) : route.continue());
+  await dialog.getByRole("textbox", { name: "新しいリストを作成" }).fill("作成失敗のリスト");
+  await dialog.getByRole("button", { name: "リストを作成", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("リスト作成に失敗しました。");
+  await expect(dialog.getByRole("checkbox", { name: "旅行", exact: true })).toBeChecked();
+  await expect(dialog.getByRole("button", { name: "所属を保存", exact: true })).toBeEnabled();
+  await database.doc(`users/${uid}/savedPlaces/${place.id}`).update({ listIds: [b] });
+  await dialog.getByRole("button", { name: "所属を保存", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("別の画面で所属リストが変更されました。");
+  expect((await database.doc(`users/${uid}/savedPlaces/${place.id}`).get()).get("listIds")).toEqual([b]);
+  await dialog.getByRole("button", { name: "リストを読み直す" }).click();
+  await expect(dialog.getByRole("checkbox", { name: "仕事帰り" })).not.toBeChecked();
+  await expect(dialog.getByRole("checkbox", { name: "旅行", exact: true })).toBeChecked();
+  await page.screenshot({ path: info.outputPath("collection-membership.png"), animations: "disabled" });
+  let failWrite = true;
+  await page.route(`**/api/places/${place.id}`, async route => {
+    if (failWrite && route.request().method() === "PATCH") {
+      failWrite = false;
+      expect((await route.fetch()).status()).toBe(200);
+      await route.fulfill({ status: 503, json: { error: "保存結果を確認できません。" } });
+    } else await route.continue();
+  });
+  await dialog.getByRole("checkbox", { name: "仕事帰り" }).check();
+  await dialog.getByRole("button", { name: "所属を保存", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("保存結果を確認できません。");
+  await expect(dialog.getByRole("checkbox", { name: "仕事帰り" })).toBeChecked();
+  await dialog.getByRole("button", { name: "所属を保存", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect((await database.doc(`users/${uid}/savedPlaces/${place.id}`).get()).get("listIds").sort()).toEqual([a, b].sort());
+  await expect(page.getByRole("article").locator(".place-collections")).toContainText("旅行");
+  await page.getByLabel("リスト", { exact: true }).selectOption(b);
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await database.doc(`users/${uid}/savedPlaces/${place.id}`).update({ name: "更新されたカフェ" });
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(page.getByRole("article", { name: "更新されたカフェ", exact: true })).toHaveCount(1);
+  // 別端末で選択中のリストが削除されても、再読込から自動的に全件へ戻る。
+  await database.doc(`users/${uid}/settings/placeLists`).set({ items: [] });
+  await page.getByRole("search").getByRole("button", { name: "検索", exact: true }).click();
+  await expect(page.getByLabel("リスト", { exact: true })).toHaveValue("all");
+  await expect(page.getByRole("article", { name: "更新されたカフェ", exact: true })).toHaveCount(1);
+});
+
+test("リスト名の変更後に届いた古い一覧応答を反映しない", async ({ page }, info) => {
+  const email = `list-late-${info.project.name}-${Date.now()}@example.test`;
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", email);
+  await page.getByRole("button", { name: "リスト管理", exact: true }).click();
+  const manager = page.getByRole("dialog", { name: "リスト管理" });
+  await manager.getByRole("textbox", { name: "新しいリストを作成" }).fill("変更前");
+  await manager.getByRole("button", { name: "リストを作成", exact: true }).click();
+  await expect(manager.getByRole("button", { name: "変更前の名前を変更" })).toBeVisible();
+  await manager.getByRole("button", { name: "閉じる", exact: true }).last().click();
+  let release: () => void = () => {}, delayed = false, fulfilled = false;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(/\/api\/places\/lists$/, async route => {
+    if (route.request().method() !== "GET" || delayed) { await route.continue(); return; }
+    delayed = true;
+    const response = await route.fetch();
+    await gate;
+    await route.fulfill({ response }); fulfilled = true;
+  });
+  await page.getByLabel("リスト", { exact: true }).focus();
+  await expect.poll(() => delayed).toBe(true);
+  await page.getByRole("button", { name: "リスト管理", exact: true }).click();
+  await manager.getByRole("button", { name: "変更前の名前を変更" }).click();
+  await manager.getByRole("textbox", { name: "新しいリスト名" }).fill("変更後");
+  await manager.getByRole("button", { name: "名前を保存", exact: true }).click();
+  await expect(manager.getByRole("button", { name: "変更後の名前を変更" })).toBeVisible();
+  release(); await expect.poll(() => fulfilled).toBe(true);
+  await manager.getByRole("button", { name: "閉じる", exact: true }).last().click();
+  await expect(page.locator("#place-list-filter option").filter({ hasText: "変更後" })).toHaveCount(1);
+  await expect(page.locator("#place-list-filter option").filter({ hasText: "変更前" })).toHaveCount(0);
 });

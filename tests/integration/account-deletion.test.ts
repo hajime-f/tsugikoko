@@ -93,6 +93,7 @@ test("削除前の本人確認用調査は書き込まず、停止・待機後�
   const { place } = await createPlace(uid, "https://example.com/delete-me");
   await db.doc(`users/${uid}/savedPlaces/${place.id}/nested/detail`).set({ note: "削除対象" });
   await db.doc(`users/${uid}/preferences/area`).set({ prefectureCode: "13" });
+  await db.doc(`users/${uid}/settings/placeLists`).set({ items: [{ id: randomUUID(), name: "退会時に削除", createdAt: Date.now(), updatedAt: Date.now() }] });
   await db.doc(`users/${uid}/recommendationDismissed/place`).set({ createdAt: Date.now() });
   await db.doc(`users/${uid}/milestones/state`).set({ shownThreshold: 1 });
   await db.doc(`users/${other}/savedPlaces/keep`).set({ note: "保持" });

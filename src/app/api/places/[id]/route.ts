@@ -1,5 +1,6 @@
 import { authenticatedUid, errorResponse, jsonResponse, smallJson } from "@/server/auth/request";
-import { actionSchema, editPlaceSchema, visitActionSchema } from "@/lib/places/schema";
+import { actionSchema, editPlaceSchema, visitActionSchema, membershipSchema } from "@/lib/places/schema";
+import { setMembership } from "@/server/places/collections";
 import { limitWrites, listVisits, updatePlace, updateVisit } from "@/server/places/service";
 import { dispatchExtraction } from "@/server/places/dispatch";
 
@@ -16,6 +17,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   try {
     const uid = await authenticatedUid(request), { id } = await context.params;
     const body = await smallJson(request);
+    if (body?.action === "setLists") {
+      const input = membershipSchema.parse(body);
+      await limitWrites(uid);
+      return jsonResponse(await setMembership(uid, id, input));
+    }
     const isVisit = body && typeof body.action === "string" && ["addVisit", "editVisit", "deleteVisit"].includes(body.action);
     const input = isVisit ? visitActionSchema.parse(body) : editPlaceSchema.or(actionSchema).parse(body);
     await limitWrites(uid);

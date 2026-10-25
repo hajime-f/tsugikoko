@@ -45,6 +45,21 @@ export const editPlaceSchema = z.object({
 }).strict();
 export const actionSchema = z.object({ action: z.enum(["retry", "trash", "restore"]) }).strict();
 
+export const MAX_PLACE_LISTS = 50;
+export type PlaceCollection = { id: string; name: string; createdAt: number; updatedAt: number };
+const listName = z.string().trim().min(1, "リスト名を入力してください。").max(40, "リスト名は40文字以内で入力してください。");
+export const collectionActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("create"), name: listName }).strict(),
+  z.object({ action: z.literal("rename"), id: z.uuid(), name: listName, updatedAt: z.number().int().nonnegative() }).strict(),
+  z.object({ action: z.literal("delete"), id: z.uuid(), updatedAt: z.number().int().nonnegative() }).strict(),
+]);
+export type CollectionAction = z.infer<typeof collectionActionSchema>;
+const listIdsSchema = z.array(z.uuid()).max(MAX_PLACE_LISTS).refine(ids => new Set(ids).size === ids.length, "同じリストを重複して指定できません。");
+export const membershipSchema = z.object({
+  action: z.literal("setLists"), listIds: listIdsSchema, expectedListIds: listIdsSchema,
+}).strict();
+export type MembershipAction = z.infer<typeof membershipSchema>;
+
 export const MAX_VISITS = 100;
 export function todayInJapan() { return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); }
 export const visitFieldsSchema = z.object({
@@ -75,6 +90,7 @@ export type SavedPlace = {
   sourceLabel: string; fetchedAt: number | null; createdAt: number; updatedAt: number;
   lastAttemptAt: number | null; deleted: boolean; deleteAt: number | null; visibility: "private";
   visitCount: number; latestVisit: VisitSummary | null; genre: Genre | null;
+  listIds?: string[];
 };
 export type PlaceList = { places: SavedPlace[]; nextCursor: string | null };
 // マイリストの検索条件。qは店名・住所・メモの部分一致、genreの"unset"はジャンル未設定。
@@ -83,6 +99,7 @@ export const placeListQuerySchema = z.object({
   q: z.string().trim().max(100, "検索語は100文字以内で入力してください。").default(""),
   genre: z.union([z.enum(["all", "unset"]), genreInput("ジャンルを選び直してください。")]).default("all"),
   sort: z.enum(["newest", "name"]).default("newest"),
+  list: z.union([z.enum(["all", "unfiled"]), z.uuid()]).default("all"),
 });
 export type PlaceListQuery = z.infer<typeof placeListQuerySchema>;
 export type VisitList = { visits: Visit[]; nextCursor: string | null };

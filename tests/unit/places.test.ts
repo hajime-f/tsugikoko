@@ -96,10 +96,11 @@ test("編集のジャンルは定義済みのIDか未設定だけを受け付け
 
 test("マイリストの検索条件は既定値を補い、長すぎる語・未定義のジャンルや並び順を拒否する", async () => {
   const { placeListQuerySchema } = await import("../../src/lib/places/schema");
-  assert.deepEqual(placeListQuerySchema.parse({}), { status: "all", q: "", genre: "all", sort: "newest" });
-  assert.deepEqual(placeListQuerySchema.parse({ status: "visited", q: "  恵比寿 カフェ ", genre: "unset", sort: "name" }), { status: "visited", q: "恵比寿 カフェ", genre: "unset", sort: "name" });
+  assert.deepEqual(placeListQuerySchema.parse({}), { status: "all", q: "", genre: "all", sort: "newest", list: "all" });
+  assert.deepEqual(placeListQuerySchema.parse({ status: "visited", q: "  恵比寿 カフェ ", genre: "unset", sort: "name" }), { status: "visited", q: "恵比寿 カフェ", genre: "unset", sort: "name", list: "all" });
+  assert.equal(placeListQuerySchema.parse({ list: "unfiled" }).list, "unfiled");
   assert.equal(placeListQuerySchema.parse({ genre: "soup_curry" }).genre, "soup_curry");
-  for (const input of [{ q: "あ".repeat(101) }, { genre: "toString" }, { genre: "unknown" }, { sort: "oldest" }, { status: "trash" }]) {
+  for (const input of [{ q: "あ".repeat(101) }, { genre: "toString" }, { genre: "unknown" }, { sort: "oldest" }, { status: "trash" }, { list: "../other" }]) {
     assert.equal(placeListQuerySchema.safeParse(input).success, false, JSON.stringify(input));
   }
 });

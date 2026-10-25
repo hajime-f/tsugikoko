@@ -8,7 +8,7 @@ runConfig:
 env:
   # 外部サービスとFirebaseで設定済みの認証方法だけを表示する。
   - variable: NEXT_PUBLIC_AUTH_PROVIDERS
-    value: "google.com,twitter.com"
+    value: "google.com,twitter.com,facebook.com"
     availability: [BUILD, RUNTIME]
   # GA4の測定ID。拡張計測機能はGA4の管理画面で無効にしておく。
   - variable: NEXT_PUBLIC_GA_MEASUREMENT_ID

@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ context }) => {
+  await context.route(/https:\/\/[^/]*(?:googletagmanager|google-analytics)\.com\//, route => route.fulfill({ contentType: "application/javascript", body: "" }));
+});
+
 test("未ログインでツギココをSNSに紹介でき、現在のURLや入力内容を共有しない", async ({ page }, info) => {
   const text = "気になったら、ツギココ。\nSNSやグルメサイトで見つけた行きたいお店を、ひとつのマイリストに。";
   const url = "https://tsugikoko.com";
@@ -82,9 +86,8 @@ test("URLを検証し、入力を保持したままログイン案内を開く",
   await expect(dialog).toContainText("ログインが完了すると、このURLを非公開のマイリストに自動で保存します");
   await expect(dialog.getByRole("button", { name: /Googleではじめる/ })).toBeEnabled();
   await expect(dialog.getByRole("button", { name: "Xではじめる", exact: true })).toBeEnabled();
-  for (const provider of ["Facebook", "Apple"]) {
-    await expect(dialog.getByRole("button", { name: new RegExp(`${provider}ではじめる`) })).toBeDisabled();
-  }
+  await expect(dialog.getByRole("button", { name: "Facebookではじめる", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: /Appleではじめる/ })).toBeDisabled();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(input).toHaveValue("https://example.com/cafe");

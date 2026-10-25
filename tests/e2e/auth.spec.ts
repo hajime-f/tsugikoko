@@ -3,7 +3,8 @@ import { expect, test } from "@playwright/test";
 import { providerLogin } from "./helpers";
 
 // このスイートは店舗/認証を検証する。推薦の集計と表示は recommendations.spec.ts で検証する。
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  await context.route(/https:\/\/[^/]*(?:googletagmanager|google-analytics)\.com\//, route => route.fulfill({ contentType: "application/javascript", body: "" }));
   await page.route(/\/api\/recommendations(?:\?|$)/, route => route.fulfill({ json: { items: [], nextCursor: null, generatedAt: null, mode: "insufficient" } }));
 });
 

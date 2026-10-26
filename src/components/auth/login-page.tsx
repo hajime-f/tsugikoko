@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, MapPin } from "lucide-react";
 import { AuthPanel } from "./auth-panel";
 import { useAuth } from "./auth-provider";
+import { trackCtaClick } from "@/lib/analytics";
 
 export function LoginPage() {
   const { user, loading, clearError } = useAuth();
@@ -22,7 +23,7 @@ export function LoginPage() {
         <h1>{mode === "login" ? "おかえりなさい。" : "次の楽しみを、ひとつ。"}</h1>
         <p className="login-description">{mode === "login" ? "あなたの「行きたい」が待っています。" : "いつものアカウントで、ツギココをはじめる。"}</p>
         <AuthPanel mode={mode} />
-        <button className="auth-mode-switch" onClick={() => { clearError(); setMode(mode === "login" ? "signup" : "login"); }}>{mode === "login" ? "初めての方はこちら" : "アカウントをお持ちの方はこちら"}</button>
+        <button className="auth-mode-switch" onClick={() => { trackCtaClick(mode === "login" ? "login_mode_signup" : "login_mode_login"); clearError(); setMode(mode === "login" ? "signup" : "login"); }}>{mode === "login" ? "初めての方はこちら" : "アカウントをお持ちの方はこちら"}</button>
       </div>
       <p className="login-footer">ツギココ / 気になるお店を、次の楽しみに。</p>
     </div>

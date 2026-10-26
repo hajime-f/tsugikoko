@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { validPlaceUrl } from "@/lib/auth/draft";
+import { trackCtaClick, type AnalyticsCta } from "@/lib/analytics";
 
 type Modal = "login" | "signup" | "privacy" | "credits" | null;
 
@@ -101,7 +102,8 @@ export function LandingPage() {
   const [draftUrl, setDraftUrl] = useState("");
   const [demoSaved, setDemoSaved] = useState(false);
 
-  function openAuth(mode: "login" | "signup") {
+  function openAuth(mode: "login" | "signup", buttonId: AnalyticsCta) {
+    trackCtaClick(buttonId);
     auth.clearError();
     setDraftUrl("");
     setMenuOpen(false);
@@ -110,6 +112,7 @@ export function LandingPage() {
 
   function submitUrl(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    trackCtaClick("hero_save");
     const value = url.trim();
     if (!value) {
       setError("気になるお店や投稿のURLを入力してください。");
@@ -137,8 +140,8 @@ export function LandingPage() {
             <a href="#how-it-works">使い方</a>
           </nav>
           <div className="header-actions">
-            <button className="button button-login" onClick={() => openAuth("login")}>ログイン</button>
-            <button className="button button-dark header-signup" onClick={() => openAuth("signup")}>はじめる<ArrowRight size={17} aria-hidden="true" /></button>
+            <button className="button button-login" onClick={() => openAuth("login", "header_login")}>ログイン</button>
+            <button className="button button-dark header-signup" onClick={() => openAuth("signup", "header_signup")}>はじめる<ArrowRight size={17} aria-hidden="true" /></button>
             <button className="icon-button mobile-menu-trigger" aria-label="メニューを開く" onClick={() => setMenuOpen(true)}><Menu size={24} aria-hidden="true" /></button>
           </div>
         </div>
@@ -191,7 +194,7 @@ export function LandingPage() {
                     <img src={scene.image} alt={scene.alt} width={scene.width} height={scene.height} className="top-photo" loading="lazy" decoding="async" />
                   </picture>
                   <span className="scene-tag"><scene.icon size={14} aria-hidden="true" />{scene.tag}</span>
-                  <button className="scene-bookmark" aria-label={`${scene.tag}の行きたいリストをつくる`} onClick={() => openAuth("signup")}><Bookmark size={19} aria-hidden="true" /></button>
+                  <button className="scene-bookmark" aria-label={`${scene.tag}の行きたいリストをつくる`} onClick={() => openAuth("signup", "scene_signup")}><Bookmark size={19} aria-hidden="true" /></button>
                 </div>
                 <div className="scene-text"><span className="scene-label">{scene.label}</span><h3>{scene.title}</h3><p>{scene.description}</p></div>
               </article>
@@ -235,7 +238,7 @@ export function LandingPage() {
           <p className="eyebrow section-eyebrow">YOUR TASTE, NEW PLACES.</p>
           <h2 id="recommendation-title">あなたの「好き」が、<br className="mobile-break" />次の「行きたい」に。</h2>
           <p>好みの近い人が見つけたお店から、あなたに合う一軒を。<br className="desktop-break" />自分だけでは見つけられなかった、新しいおいしさに出会えます。</p>
-          <button className="text-button" onClick={() => openAuth("signup")}>自分だけのリストをつくる<ArrowRight size={19} aria-hidden="true" /></button>
+          <button className="text-button" onClick={() => openAuth("signup", "recommendation_signup")}>自分だけのリストをつくる<ArrowRight size={19} aria-hidden="true" /></button>
           <div className="privacy-note"><LockKeyhole size={15} aria-hidden="true" /><span>記録は非公開から。公開するのは、自分で選んだものだけ。</span></div>
         </section>
 
@@ -245,7 +248,7 @@ export function LandingPage() {
         </section>
 
         <section className="final-cta">
-          <div className="section final-cta-inner"><div><p>次の休日、どこに行こう。</p><h2>その答えを、ツギココに。</h2></div><button className="button button-dark" onClick={() => openAuth("signup")}>行きたいリストをつくる<ArrowRight size={19} aria-hidden="true" /></button></div>
+          <div className="section final-cta-inner"><div><p>次の休日、どこに行こう。</p><h2>その答えを、ツギココに。</h2></div><button className="button button-dark" onClick={() => openAuth("signup", "footer_signup")}>行きたいリストをつくる<ArrowRight size={19} aria-hidden="true" /></button></div>
         </section>
         <div className="section"><ShareSiteSection /></div>
       </main>
@@ -259,7 +262,7 @@ export function LandingPage() {
         <DialogContent className="menu-dialog">
           <DialogTitle className="sr-only">メニュー</DialogTitle><DialogDescription className="sr-only">ツギココのページメニュー</DialogDescription>
           <Brand /><nav aria-label="モバイルナビゲーション"><a href="#about" onClick={() => setMenuOpen(false)}>ツギココとは<ArrowRight size={20} /></a><a href="#how-it-works" onClick={() => setMenuOpen(false)}>使い方<ArrowRight size={20} /></a><a href="#faq-title" onClick={() => setMenuOpen(false)}>よくある質問<ArrowRight size={20} /></a></nav>
-          <button className="button button-dark" onClick={() => openAuth("signup")}>はじめる<ArrowRight size={18} aria-hidden="true" /></button>
+          <button className="button button-dark" onClick={() => openAuth("signup", "menu_signup")}>はじめる<ArrowRight size={18} aria-hidden="true" /></button>
         </DialogContent>
       </Dialog>
 
@@ -269,7 +272,7 @@ export function LandingPage() {
             <span className="modal-brand"><MapPin size={30} aria-hidden="true" /></span>
             <DialogTitle className="dialog-title">{modal === "login" ? "おかえりなさい。" : "次の「行きたい」を、残そう。"}</DialogTitle>
             <DialogDescription className="dialog-description">{modal === "login" ? "あなたの行きたいリストへ。" : "いつものアカウントで、ツギココをはじめる。"}</DialogDescription>
-            <AuthPanel mode={modal} draftUrl={draftUrl} />
+            <AuthPanel mode={modal} draftUrl={draftUrl} analyticsLocation="landing_dialog" />
           </>}
           {modal === "privacy" && <>
             <DialogTitle className="dialog-title">プライバシーについて</DialogTitle>

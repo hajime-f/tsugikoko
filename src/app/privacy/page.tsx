@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPage() {
-  return <PrivacyDocument title="プライバシーポリシー">
+  return <PrivacyDocument title="プライバシーポリシー" updatedAt="2026年10月27日">
     <p>{SITE_OPERATOR}（以下「運営者」）は、ツギココの提供にあたり、次のとおり利用者の情報を取り扱います。</p>
     <section><h2>取得する情報と利用目的</h2>
       <ul>

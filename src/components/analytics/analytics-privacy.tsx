@@ -22,8 +22,9 @@ export function AnalyticsPrivacy() {
     <p>サービス改善のため、利用者数や店舗の保存件数などを集計し、Google CloudのBigQueryに保存します。集計結果に、名前・メールアドレス・店舗URL・メモ・評価の明細は含めません。</p>
     {analyticsConfigured && <>
       <h3>アクセス解析と外部への送信</h3>
-      <p>Google LLCが提供するGoogle Analyticsを使い、ページの閲覧と初回登録を計測します。Cookie等のブラウザー識別子、閲覧ページの種類、登録時の認証方法、端末・ブラウザー情報がGoogleへ送信されます。通信時にはIPアドレスもGoogleに伝わります。サービスの利用状況の把握と改善に利用し、広告向けのGoogleシグナルと広告のパーソナライズは無効にしています。</p>
-      <p>Google Analyticsの計測イベントには、氏名・メールアドレス・アカウントのユーザーID・保存した店舗URL・メモ・評価・検索語・位置情報を含めません。ページURLのクエリや参照元URLも送りません。</p>
+      <p>Google LLCが提供するGoogle Analyticsを使い、ページの閲覧、初回登録、登録・ログインへ進むボタンの操作、認証の開始、トップページのスクロール到達率（25・50・75・90%）を計測します。Cookie等のブラウザー識別子、閲覧ページの種類、ボタンの位置を表す固定の識別名、認証方法、端末・ブラウザー情報がGoogleへ送信されます。通信時にはIPアドレスもGoogleに伝わります。サービスの利用状況と広告の効果の把握・改善に利用し、広告向けのGoogleシグナルと広告のパーソナライズは無効にしています。</p>
+      <p>流入元の把握のため、初回のページ閲覧に限り、広告・リンクの識別用パラメーター（utm_source、utm_medium、utm_campaign、utm_content、utm_term）とGoogle広告のクリック識別子（gclid）を、文字種と長さを制限して送信します。外部サイトの参照元はスキームとホストまでとし、パスやクエリは送りません。サイト内の移動では参照元を送りません。</p>
+      <p>Google Analyticsの計測イベントには、フォームに入力したURL、サイト内の検索語、保存した店舗URL・メモ・評価、氏名・メールアドレス・アカウントのユーザーID・位置情報を明示的に渡しません。上記以外のURLパラメーターとハッシュは除外します。流入情報の重複送信を抑えるため、同じタブの最終計測時刻だけをブラウザーに保存し、30分間計測がなければ新しい訪問として扱います。</p>
       <p>Googleによる情報の取り扱いは、<a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Googleのプライバシーポリシー</a>をご覧ください。</p>
       <label className="analytics-preference"><input type="checkbox" checked={disabled} onChange={event => {
         const value = event.target.checked;

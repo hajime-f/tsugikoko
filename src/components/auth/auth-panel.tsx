@@ -5,8 +5,9 @@ import { useId } from "react";
 import { useAuth } from "./auth-provider";
 import { isProviderEnabled, providers } from "@/lib/auth/providers";
 import { setPendingDraft } from "@/lib/auth/draft";
+import { trackLoginStart, type AuthLocation } from "@/lib/analytics";
 
-export function AuthPanel({ mode = "login", draftUrl = "" }: { mode?: "login" | "signup"; draftUrl?: string }) {
+export function AuthPanel({ mode = "login", draftUrl = "", analyticsLocation = "login_page" }: { mode?: "login" | "signup"; draftUrl?: string; analyticsLocation?: AuthLocation }) {
   const auth = useAuth();
   const consentId = useId();
   return <>
@@ -16,7 +17,7 @@ export function AuthPanel({ mode = "login", draftUrl = "" }: { mode?: "login" | 
       {providers.map((provider) => {
         const enabled = isProviderEnabled(provider.id);
         return <button key={provider.id} className="provider-button" aria-describedby={consentId} disabled={!enabled || auth.busy || auth.loading}
-          onClick={() => { setPendingDraft(draftUrl); void auth.login(provider.id); }}>
+          onClick={() => { setPendingDraft(draftUrl); trackLoginStart(provider.id, analyticsLocation, mode); void auth.login(provider.id); }}>
           <span className={`provider-mark provider-${provider.name.toLowerCase()}`} aria-hidden="true">{provider.mark}</span>
           <span>{provider.name}で{mode === "login" ? "ログイン" : "はじめる"}</span>
           {!enabled && <small>準備中</small>}

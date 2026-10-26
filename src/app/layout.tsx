@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   description:
     "SNSで見かけたお店も、通りすがりに気になったお店も。行きたい飲食店・カフェを残して、次のお出かけをもっと楽しみに。",
   robots: { index: false, follow: false },
+  other: { "google-adsense-account": "ca-pub-9669747563254817" },
   openGraph: {
     type: "website", locale: "ja_JP", siteName: "ツギココ", url: SITE_URL,
     title: "ツギココ | 気になったら、ツギココ",

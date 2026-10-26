@@ -475,3 +475,43 @@ tsugikoko/
 - Claude Codeのレビュー・修正後の再レビューは完了し、追加指摘なし。通常の更新応答に残る削除済みリストIDの統一は、本人だけの応答であり、所属操作前に最新の有効IDを取得するため今回は見送り。表示・検索・所属取得では削除済みIDを除外する。
 - 本番ビルド`build-2026-10-25-007`、Cloud Build `e1414c7a-9587-49d2-b67a-9339d9b9e20c`は成功し、Firebase CLIのRollout complete / Deploy completeを確認。コミットを`git archive`で一時ディレクトリに展開してデプロイし、未追跡のRESUME.md・ロゴ画像を含めなかった。
 - `https://tsugikoko.com/home`は200。配信されたページのJavaScriptで「リスト管理」「所属リストを選ぶ」「所属を保存」と所属更新処理を確認。`GET /api/places/lists`は未認証で401。本番アカウントの記録は検証目的で変更していない。登録・所属・削除等の操作確認はエミュレーターで実施済み。
+
+## AdSenseの所有権確認（2026年10月25日）
+
+- 藤田さんから広告収益で運営費をまかないたいとの依頼。AdSense管理画面で`tsugikoko.com`のリンク設定へ進み、確認用ID `ca-pub-9669747563254817` が提示された。
+- `src/app/layout.tsx`の`metadata.other`へ`google-adsense-account`を追加。広告配信スクリプトや広告枠は未追加。既存のGoogle広告の計測タグ`AW-18532065959`は広告収益用のAdSense設定とは別。
+- 本番用ビルド（TypeScript含む）と差分チェックが成功。生成されたトップ・ホーム・ログインのHTMLで、head内に正しいIDのメタタグが1つ出ることを確認。Claude Codeのレビューは指摘なし。
+- 本番反映済み。HEADのgit archiveにlayout.tsxだけを上書きした一時ディレクトリからデプロイ。未追跡のスクリーンショット・RESUME.md・ロゴ画像は含めなかった。Cloud Build `58493a69-9fb0-424f-8772-8cc24b311d2b`はSUCCESS、Firebase CLIのRollout complete / Deploy completeを確認。公開トップページが200を返し、head内に提示されたIDのメタタグが1つ出ることも確認済み。今回はコミット・プッシュの新規依頼はなく未コミット。
+- 所有権確認と審査の結果はAdSense管理画面で別途確認する。広告配信に進む際はads.txt・掲載場所・プライバシー説明を整える。現状は非公開のログイン後画面が中心で、全体のnoindex設定も残る。所有権確認の成功を広告掲載承認と同一視しない。
+
+## 公開トップページの検索除外を解除（2026年10月26日）
+
+- 藤田さんからSearch Consoleの「noindexタグによって除外されました」という通知の相談。試作時の全体noindexが残っており、本番トップもnoindex, nofollowを返すことを確認した。
+- `src/app/page.tsx`のmetadataでトップだけindex, followを指定し、ルートレイアウトの既定値を上書き。READMEの試作中の説明も更新。home/login/privacy/terms/data-deletionのnoindex, nofollowは維持する。個人記録のアクセス制御は認証で継続し、noindexをアクセス制御の代わりにはしない。
+- ビルド（TypeScript含む）、git diff --check成功。生成HTML6ページでトップのみindex、他5ページnoindex、AdSenseメタタグとトップのcanonicalが維持されていることを確認。Claude Codeのレビューは指摘なし。
+- 本番反映済み。HEADのgit archiveに前回反映済みlayout.tsxと今回page.tsxを重ねた一時ディレクトリからデプロイ。Cloud Build `c888ef8a-42b0-4546-8de4-621a75fb4ab4`はSUCCESS、Firebase CLIのRollout complete / Deploy completeを確認。公開トップ・home・loginの200応答でトップのみindex, follow、他2ページnoindex, nofollowとAdSenseメタタグ維持を確認。トップにX-Robots-Tagヘッダーなし、robots.txtは404でクロール拒否なし。未追跡ファイルは含めず、コミット・pushは行っていない。
+- 反映後、Search ConsoleでトップURLの公開URLテスト・インデックス登録リクエストを案内する。検索への掲載・反映時期はGoogle側の判断であり、設定変更だけで登録完了とはしない。除外を維持する他のページは登録を求めない。
+- AdSenseは藤田さんから「審査に進んだ」と報告あり。承認結果は未確認。Google広告による集客も藤田さんが意図して実施中で、収益用AdSenseとは別。広告の保存操作が無反応との相談があったが、解消は未確認。
+
+## Google広告タグの確認とLooker Studioの修復（2026年10月27日）
+
+- Google広告の「Googleタグが設定されていません」という診断について、公開HTMLに`AW-18532065959`とconfig呼び出しがあることを確認。実Chromeでもgtag.jsが200、同IDのviewthroughconversionとuser-listへの通信が200、JavaScript例外なし。藤田さんへ管理画面の「接続をテスト」を案内し、その結果は未確認。GA4の`G-FRBRZ4W4C1`のタグ読み込みとcollectへの204も確認したが、管理画面での実受信とは区別する。
+- Looker Studioのレポート: https://datastudio.google.com/reporting/c98a2218-3ba1-46bf-9e77-277f87e729fa/page/tEnnC 。一部が「ユーザーの設定エラー / このデータソースが正しく設定されていません」、藤田さんの表示したエラーIDは`c49b7b1f`。Codexの一時ブラウザーではログイン必須で閲覧不可。Claude Codeがブラウザーで読み取り確認した。
+- BigQueryの`tsugikoko.analytics.daily_metrics`は10/18〜10/26の9行、10/19以降は毎日更新、全行truncated=false。最新生成日時は10/27 0:15:05 JST。直近2日間のasia-northeast1のJOBS_BY_PROJECTでクエリエラーは0件。個人データを読まず、日付・生成時刻・打ち切りフラグだけ確認した。
+- Claude Code確認: BigQuery接続の5グラフ（スコアカード4・折れ線1）は表示され、失敗はGA4の期間グラフ1つ。GA4データソース名`tsugikoko`、認証はオーナー、更新頻度12時間。グラフはディメンション「日（日付）」、指標「表示回数・アクティブユーザー数・セッション」、フィルタなし、過去28日（今日を除く）。両データソースとも一覧は「正常に接続」。この時点では原因未確定だったが、下記の複製による診断で特定した。
+- Claude Code追加確認: GA4アカウント15912716、プロパティ559533898、ストリーム16159260398、測定ID G-FRBRZ4W4C1が一致。過去48時間の受信あり、標準レポートの9/29〜10/26は表示回数224・アクティブユーザー154で日別データも存在する。表示エラーをデータ不足とは扱わない。通信のエラー詳細は取得できなかったため、グラフの複製で切り分けた。
+- Claude Codeが藤田さんの承認を受けてフィールド更新・同一プロパティへの再接続を試したが、いずれも変更検出なし（461フィールド、認証者維持）。再接続後もGA4グラフのエラーは継続した。
+- 原因は期間グラフのディメンションが「日」（Day、月内の日番号01〜31）だったこと。承認を受けて作成した診断用複製で、単一指標でもエラーが続く一方、ディメンションを「日付」（Date）へ替えると表示された。3指標と28日間を戻しても正常に表示されたため、指標の組み合わせやデータ不足は原因ではない。診断用複製は削除済み。
+- 藤田さんの指示でClaude Codeが元のグラフも「日」から「日付」へ変更したと、ブリッジ`99d342a1-e782-4fbd-b257-c1914bae8ec4`で報告。表示回数・アクティブユーザー数・セッションの3指標と自動28日間は維持。閲覧画面でGA4の期間グラフとBigQueryの5グラフがすべて表示されたことをClaude Codeが確認した。最終修正でデータソース・権限は変更していない。Looker Studioの当該エラーは解消済み。
+
+## GA4の流入元・登録導線・スクロール計測（2026年10月27日）
+
+- 藤田さん本人から実装の承認、および「Claude のレビューが通ったら、commit & push & deploy」の指示を受けて対応。トップページ内の認証ダイアログも使えるため、`/login`の表示回数だけではログイン手前の離脱と断定できない。
+- 初回page_viewにUTM5項目（英字始まり1〜64文字、英数字・ハイフン・下線のみ）とgclid（英字を含む1〜256文字）だけを許可。重複・空値・不正文字・上限超過・UTMの電話番号相当の数字列を除外。その他のクエリとハッシュは送らない。gclidはGoogle広告の自動タグによる流入識別のため採用。広告側の自動タグ設定やGA4リンクは変更していない。英字の人名は形式検査だけでは判別できないため、UTMは個人情報を入れない運用識別名専用とREADMEに明記。
+- 外部referrerはHTTP(S) origin最大255文字まで。自サイト内部では空。流入情報はイベント単体だけに渡し、グローバルsetと後続の操作・ページ閲覧には残さない。sessionStorageには最終計測時刻だけを保存し、同タブ30分無イベントを境に初回を判定する（GA自身のセッションIDとは独立）。保存不可・解析停止中・停止からの再開時には流入情報を送らない。
+- `cta_click`は固定button_idでヘッダー・保存・本文・モバイルメニュー・ログインモード切替を区別。保存CTAは入力が空や不正でも操作として数える。`login_start`は認証開始時の固定method/button_location/auth_modeで、登録成功の`sign_up`と区別。`scroll_depth`はトップで画面下端が25/50/75/90%に到達したとき各1回、初期表示だけでは送らない。入力内容・店舗URLはイベントに渡さず、停止設定と失敗時の画面動作維持を適用。
+- analytics-privacyと共有される/privacyの送信内容を更新。更新日は/privacyだけ2026年10月27日。READMEにイベント名・制約・UTM命名・スクロール定義を記載。
+- Claude Codeレビュー: `2fa4644b-eb12-42b1-b28f-2116e5053ea9`と追加確認`bdbd2a0a-d641-47df-a770-3d7630dcf672`で公開を止める指摘なし。任意提案の入力状態イベントは今回は見送り。末尾改行の除外を確認するE2Eと明示的な文字種チェックも確認済み（JavaScriptの$はmなしでは末尾改行直前に一致しないため、チェックは冗長だが読みやすさのため維持）。
+- 検証: typecheck、単体25件、本番用build成功。Googleタグを模擬したスマホ・PCの解析E2Eは全30件成功（28件成功後、テストURLを既存入力制限に合うexample.comへ直して残りCTA2件成功）。途中でテスト側のalertセレクターと認証キャンセルの待機を既存テストと同じ15秒に修正。標準の3101は別プロジェクト使用中のため、runtime内の一時Playwright設定で3111を利用。Firebaseのdemoエミュレーターのみ使用、本番へのイベント・登録は発生させていない。
+- 実装コミット`eaedecb203285d96a165a7415e2c75df1fe939f0`をmainへpush済み。前回レビュー・本番反映済みのAdSenseメタタグとトップindex設定もGitへ記録した。未追跡のスクリーンショット・logo・RESUMEは含めていない。コミットのgit archiveを`/private/tmp/tsugikoko-analytics-dxevvrbi`へ展開し、本番へデプロイした。
+- 本番反映完了: Cloud Build `7fa6ef95-73ee-4cd9-93a6-0c8366b06bef` はSUCCESS（10/27 7:39:47 JST）。Firebase CLIでRollout complete / Deploy completeを確認。公開ドメインを一時Chromeで開き、実Googleタグを模擬したまま、本番測定ID、初回のUTMと外部origin、秘密クエリ・ハッシュ除外、CTA、スクロール4段階、停止設定の再読込後の維持、/privacyの新表記と更新日、トップindexとAdSenseメタタグ維持を検証して成功。JavaScript例外0件。検証イベントはGoogleへ送信していない。GA4管理画面での流入分類・実受信の集計結果は未確認で、反映後の実アクセスで確認する。過去の流入元を復元する変更ではない。

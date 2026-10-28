@@ -33,6 +33,10 @@ http://127.0.0.1:3000 を開きます。
 
 Google・X・Facebook認証と店舗保存は実際のFirebaseに接続します。訪問記録・評価と、ユーザー横断のレコメンドを利用できます。ログイン前にURLを入力して「保存してはじめる」を押すと、ログイン完了後にFirestoreへ非公開で自動保存します。URLは保存成功まで`sessionStorage`でログインしたユーザーにひも付けて保持し、失敗時は入力欄から再試行できます。再読み込みや同じURLの再試行でも、サーバーで重複を防ぎます。未保存のURLはログアウト時に消去しますが、登録済みの店舗はログアウト後も残ります。公開トップページは検索エンジン向けにindex, followを指定し、それ以外の画面はnoindex, nofollowを維持しています。
 
+### トップページの登録導線と見本
+
+ヒーローの「URLなしではじめる」は入力欄のURLを引き継がず、登録ダイアログを開きます。モバイルでは説明・登録導線を写真より先に表示します。Instagram・Xは投稿内容を取得せずURLを保存し、同じURLの登録済み店名・住所・ジャンルがあれば初期値に使います。公式サイトなども取得できる場合だけ補完します。マイリスト・おすすめの見本は架空の入力済みデータで、写真はイメージです。デモのボタンは表示の切替だけを行い、サーバーへの店舗保存やおすすめの取得を行いません。おすすめが登録直後に必ず表示されるという説明はしません。
+
 ## 認証設定
 
 - `src/lib/firebase/client.ts`はWebアプリの公開設定です。サービスアカウント鍵やOAuthシークレットは含みません。
@@ -307,7 +311,7 @@ GA4はページの利用状況、BigQueryはサービス側の件数集計に使
 
 外部参照元はHTTP(S)のorigin（スキーム・ホスト・ポート、最大255文字）だけを送り、パス・クエリ・認証情報は除外します。自サイト内の遷移では空です。重複を防ぐため`sessionStorage`に最終計測時刻だけを保存し、同じタブで30分間イベントがなければ次のページ読み込みを新しい訪問の入口とします。GA4自身のセッションIDとは独立した送信制御です。リロード・SPA遷移では流入情報を再送せず、保存領域が使えない場合と停止から再開した画面では流入情報を送りません。
 
-操作イベントは`cta_click`（`button_id`: `header_login`、`header_signup`、`hero_save`、`scene_signup`、`recommendation_signup`、`footer_signup`、`menu_signup`、`login_mode_signup`、`login_mode_login`）、`login_start`（`method`、`button_location`: `landing_dialog`または`login_page`、`auth_mode`: `login`または`signup`）、`scroll_depth`（`percent_scrolled`: 25・50・75・90）です。`hero_save`は入力が不正でも送る操作の記録、`login_start`は認証開始であり認証成功ではありません。スクロールはトップページで画面下端が各割合に達したときに1回ずつ送り、初期表示だけでは送りません。パラメーターは固定値で、フォーム入力・ボタンの表示文言・保存URLは送りません。拡張計測の自動スクロールは無効のままにします。
+操作イベントは`cta_click`（`button_id`: `header_login`、`header_signup`、`hero_save`、`hero_signup_no_url`、`scene_signup`、`recommendation_signup`、`footer_signup`、`menu_signup`、`login_mode_signup`、`login_mode_login`）、`login_start`（`method`、`button_location`: `landing_dialog`または`login_page`、`auth_mode`: `login`または`signup`）、`scroll_depth`（`percent_scrolled`: 25・50・75・90）です。`hero_save`は入力が不正でも送る操作の記録、`hero_signup_no_url`はヒーローの「URLなしではじめる」の操作、`login_start`は認証開始であり認証成功ではありません。スクロールはトップページで画面下端が各割合に達したときに1回ずつ送り、初期表示だけでは送りません。パラメーターは固定値で、フォーム入力・ボタンの表示文言・保存URLは送りません。拡張計測の自動スクロールは無効のままにします。
 
 ユーザーID・氏名・メール・店舗URL・メモ・評価・サイト内検索語・位置情報を計測イベントへ明示的に渡しません。Googleシグナルと広告のパーソナライズも無効です。GAはCookie等の識別子や端末情報を扱い、接続先にはIPアドレスも伝わるため、「個人を識別する情報が一切外部へ送られない」とは説明しません。[Googleのプライバシー設定](https://developers.google.com/tag-platform/security/guides/privacy)
 

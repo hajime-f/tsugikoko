@@ -515,3 +515,15 @@ tsugikoko/
 - 検証: typecheck、単体25件、本番用build成功。Googleタグを模擬したスマホ・PCの解析E2Eは全30件成功（28件成功後、テストURLを既存入力制限に合うexample.comへ直して残りCTA2件成功）。途中でテスト側のalertセレクターと認証キャンセルの待機を既存テストと同じ15秒に修正。標準の3101は別プロジェクト使用中のため、runtime内の一時Playwright設定で3111を利用。Firebaseのdemoエミュレーターのみ使用、本番へのイベント・登録は発生させていない。
 - 実装コミット`eaedecb203285d96a165a7415e2c75df1fe939f0`をmainへpush済み。前回レビュー・本番反映済みのAdSenseメタタグとトップindex設定もGitへ記録した。未追跡のスクリーンショット・logo・RESUMEは含めていない。コミットのgit archiveを`/private/tmp/tsugikoko-analytics-dxevvrbi`へ展開し、本番へデプロイした。
 - 本番反映完了: Cloud Build `7fa6ef95-73ee-4cd9-93a6-0c8366b06bef` はSUCCESS（10/27 7:39:47 JST）。Firebase CLIでRollout complete / Deploy completeを確認。公開ドメインを一時Chromeで開き、実Googleタグを模擬したまま、本番測定ID、初回のUTMと外部origin、秘密クエリ・ハッシュ除外、CTA、スクロール4段階、停止設定の再読込後の維持、/privacyの新表記と更新日、トップindexとAdSenseメタタグ維持を検証して成功。JavaScript例外0件。検証イベントはGoogleへ送信していない。GA4管理画面での流入分類・実受信の集計結果は未確認で、反映後の実アクセスで確認する。過去の流入元を復元する変更ではない。
+
+## トップページの登録導線改善（2026年10月28日・未コミット／未反映）
+
+- Claude Codeからの相談`c59f1f7a-572b-4625-bc47-423f0f03b286`について、藤田さん本人から「はい、お願いします」と実装・テスト・レビューまで承認を受けた。今回のコミット・push・デプロイは指示待ち。前回GA4改善の公開版はそのまま。
+- Instagram・Xは投稿の取得対象外だがURL保存は可能。同一URLの共通店名・住所・ジャンルがあれば初期値に使い、なければ手入力できる。公式サイトなども取得可能な情報だけ補完する。extraction/sources.ts、places/service.tsのcreatePlace/sharedFacts、URL正規化と実際のカード描画を確認し、FAQ・url-hint・手順02・注記を事実に揃えた。未実装のレビュー／リスト公開の説明も、非公開記録と店名・URLのSNS共有へ修正。
+- ヒーローのフォーム直下に控えめな「URLなしではじめる」を追加。openAuth(signup, hero_signup_no_url)で入力途中のURLを登録ダイアログへ引き継がない。AnalyticsCta、README、E2Eに固定IDを追加。モバイルでは写真を説明・フォーム・CTAの下へ移動し、320x568、375x667、390x844でも副CTAが初期画面内に収まるようにした。
+- 既存デモを、架空の入力済みマイリストカード（店名・住所・メモ・所属リスト・訪問操作の例）とおすすめカードに拡張。見本、写真は実店舗ではない、推薦は候補不足時に表示されないことを明記。デモのボタンは「おすすめを保存してみる」で表示のみ切替、実店舗保存やおすすめ取得は行わない。
+- copywritingスキルを適用。変更ファイルはlanding-page.tsx、globals.css、analytics.ts、README.md、landing.spec.ts、analytics.spec.tsと本記録。
+- 検証成功: typecheck、単体25件、本番用build、トップE2E12件、解析E2E32件。レビュー後の文言修正・スクリーンショット更新に関係するトップE2E4件も再実行成功。Googleタグは模擬、認証はdemoエミュレーターのみで本番へ送信・登録していない。既存lintコマンド／ESLint依存はないため実行せず、追加導入もしなかった。git diff --check成功。
+- 実Chromeのスマホ・PC表示を目視確認。画面サイズ変更直後のモバイル撮影でChromeのタイル状の撮影崩れが出たため、サイズ変更後にページを再読込しCSSピクセルで撮影して正常画像を確認。長い要素の切り取り撮影では画面外の固定要素が写るため、スマホ見本は通常viewportの撮影へ変更。画面自体の横はみ出しなし。
+- Claudeレビュー`92f24833-b77b-4d99-9365-5d4b70dcc1c6`で差し戻し不要。任意提案の「どの見本を保存するか」をボタン文言へ反映し、`1c91bad6-d7d2-4bb9-9d67-e6af21e12e96`で結果を連絡。32件の解析E2E成功を条件に完了可との判定で、成功確認済み。
+- 確認用画像（Git対象外）: `.agent-bridge/runtime/landing-hero-mobile.png`、`landing-demo-mobile.png`、`landing-demo-desktop.png`。モバイル写真の順序変更は藤田さんへスクリーンショットを案内する。未追跡の既存画像・ロゴ・RESUMEは触っていない。

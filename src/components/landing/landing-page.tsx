@@ -66,11 +66,11 @@ const scenes = [
 const faqs = [
   {
     question: "どんなお店を登録できますか？",
-    answer: "飲食店とカフェが対象です。お店の公式サイトや紹介ページに加え、Instagram・Xの投稿URLからの登録を予定しています。情報を取得できないときも、URLを残しておける設計です。",
+    answer: "飲食店とカフェの公式サイト、紹介ページ、Instagram・Xの投稿URLを保存できます。Instagram・Xの投稿内容は読み取らず、まずURLを残します。店名や住所はあとから入力できます。同じURLに登録済みの店名・住所などがある場合は、入力の初期値に使います。公式サイトなども、情報を取得できる場合だけ自動で補完します。",
   },
   {
     question: "保存したお店は、ほかの人に見えますか？",
-    answer: "あなたの記録は、はじめは非公開です。レビューやリストは、自分で選んだものだけ公開できます。非公開の保存・評価もおすすめの計算に利用しますが、誰が何を保存・評価したかをほかの人に表示することはありません。店名・住所・ジャンルは、同じURLを保存する人の入力補助にも利用します。",
+    answer: "保存リスト、メモ、訪問記録、評価は非公開です。お店の名前とURLは、自分で選んでSNSに共有できます。非公開の保存・評価もおすすめの計算に利用しますが、誰が何を保存・評価したかをほかの人に表示することはありません。店名・住所・ジャンルは、同じURLを保存する人の入力補助にも利用します。",
   },
   {
     question: "お店の予約もできますか？",
@@ -78,7 +78,7 @@ const faqs = [
   },
   {
     question: "今すぐ使えますか？",
-    answer: "Googleアカウントで登録・ログインし、お店を非公開のマイリストに保存できます。ログイン前にURLを入力して「保存してはじめる」を押すと、ログイン完了後に自動で保存します。保存や評価の傾向を使ったおすすめも利用できます。候補が十分に集まるまでは表示されない場合があります。",
+    answer: "Googleなどのアカウントで登録・ログインし、お店を非公開のマイリストに保存できます。「URLなしではじめる」から登録して、あとでお店を追加することもできます。ログイン前にURLを入力して「保存してはじめる」を押すと、ログイン完了後に自動で保存します。保存や評価の傾向を使ったおすすめも利用できます。候補が十分に集まるまでは表示されない場合があります。",
   },
 ];
 
@@ -167,7 +167,8 @@ export function LandingPage() {
                 <button className="button button-dark url-submit" type="submit">保存してはじめる<ArrowRight size={18} aria-hidden="true" /></button>
               </form>
               {error && <p className="form-error" id="url-error" role="alert">{error}</p>}
-              <p className="url-hint" id="url-hint">Instagram・X・お店のサイトから。<span>URLひとつで、ツギココに。</span></p>
+              <button className="hero-signup-secondary" onClick={() => openAuth("signup", "hero_signup_no_url")}>URLなしではじめる<ArrowRight size={16} aria-hidden="true" /></button>
+              <p className="url-hint" id="url-hint">Instagram・X・お店のサイトのURLを保存。<span>SNSの投稿はURLを残して、店名はあとから入力できます。</span></p>
               <a className="hero-more" href="#how-it-works">使い方を見る<ArrowDown size={16} aria-hidden="true" /></a>
             </div>
           </div>
@@ -210,25 +211,36 @@ export function LandingPage() {
               <p className="how-description">スクリーンショットに埋もれていた「あのお店」を、<br className="desktop-break" />あなたの行きたいリストへ。</p>
               <ol className="steps">
                 <li><span className="step-number">01</span><div><h3>気になるお店のURLをコピー</h3><p>SNSの投稿も、お店のホームページも。</p></div></li>
-                <li><span className="step-number">02</span><div><h3>ツギココに貼って、保存</h3><p>お店の情報を自動で取得。細かい入力は不要です。</p></div></li>
-                <li><span className="step-number">03</span><div><h3>次のお出かけで、行ってみる</h3><p>近くのお店や気分に合う一軒が、すぐ見つかる。</p></div></li>
+                <li><span className="step-number">02</span><div><h3>ツギココに貼って、保存</h3><p>まずはURLを保存。公式サイトなどは、取得できる情報だけ自動で補完します。</p></div></li>
+                <li><span className="step-number">03</span><div><h3>次のお出かけで、行ってみる</h3><p>リストやメモで整理して、行ったら訪問日や評価も残せます。</p></div></li>
               </ol>
-              <p className="small-note">取得できない情報は、URLだけでも残せます。</p>
+              <p className="small-note">Instagram・Xの投稿内容は取得しません。店名や住所はあとから入力できます。</p>
             </div>
-            <div className="demo-stage">
-              <span className="demo-label">保存のイメージ</span>
+            <div className="demo-stage" aria-label="登録後のマイリストとおすすめの見本">
+              <p className="demo-label">登録後は、こんなマイリストに。<span>架空のお店・入力済みの記録例です。</span></p>
               <div className="demo-window">
-                <div className="demo-toolbar"><span className="mini-brand">ツギココ<span>.</span></span><span className="demo-badge">DEMO</span></div>
-                <div className="demo-url"><Link2 size={17} aria-hidden="true" /><span>気になるカフェのURL</span><Check size={17} aria-hidden="true" /></div>
-                <div className="demo-card-photo"><picture><source type="image/avif" srcSet="/images/landing/coffee-provided.avif" /><img src="/images/landing/coffee-provided.webp" alt="保存画面のイメージに使うコーヒーの写真" width={800} height={532} className="top-photo" loading="lazy" decoding="async" /></picture></div>
-                <div className="demo-card-body">
-                  <p className="demo-category"><Coffee size={13} aria-hidden="true" />カフェ・コーヒー</p>
-                  <h3>週末に行きたい、あのカフェ</h3>
-                  <p className="demo-caption">お店の情報が、ひとつのカードに。</p>
-                  <button className={`demo-save${demoSaved ? " is-saved" : ""}`} onClick={() => setDemoSaved(!demoSaved)} aria-pressed={demoSaved}>{demoSaved ? <Check size={18} aria-hidden="true" /> : <Plus size={18} aria-hidden="true" />}{demoSaved ? "行きたいリストに追加済み" : "「行きたい」に追加してみる"}</button>
-                </div>
+                <div className="demo-toolbar"><span className="mini-brand">あなたのマイリスト</span><span className="demo-badge">見本</span></div>
+                <article className="demo-place-card" aria-label="保存カードの見本">
+                  <div className="demo-card-photo"><picture><source type="image/avif" srcSet="/images/landing/coffee-provided.avif" /><img src="/images/landing/coffee-provided.webp" alt="カフェのイメージ写真（実店舗の写真ではありません）" width={800} height={532} className="top-photo" loading="lazy" decoding="async" /></picture><span className="demo-place-state">行きたい</span><span className="demo-private"><LockKeyhole size={12} aria-hidden="true" />非公開</span></div>
+                  <div className="demo-card-body">
+                    <p className="demo-category"><Coffee size={13} aria-hidden="true" />カフェ・コーヒー</p>
+                    <h3>週末に行きたいカフェ</h3>
+                    <p className="demo-address"><MapPin size={13} aria-hidden="true" />サンプル市 みどり町</p>
+                    <p className="demo-memo">次の休日に、窓際でゆっくり。</p>
+                    <div className="demo-lists" aria-label="所属リストの見本"><span>カフェ巡り</span><span>週末</span></div>
+                    <p className="demo-source"><Link2 size={13} aria-hidden="true" />保存したURLから元のページへ</p>
+                    <div className="demo-actions" aria-label="画面操作の例"><span><Check size={13} aria-hidden="true" />行ってきた</span><span>編集</span></div>
+                  </div>
+                </article>
+                <p className="demo-recommendation-title"><Sparkles size={14} aria-hidden="true" />おすすめの表示例</p>
+                <article className="demo-recommendation" aria-label="おすすめカードの見本">
+                  <div className="demo-recommendation-photo"><picture><source type="image/avif" srcSet="/images/landing/salad-provided.avif" /><img src="/images/landing/salad-provided.webp" alt="ランチのイメージ写真（実店舗の写真ではありません）" width={800} height={533} className="top-photo" loading="lazy" decoding="async" /></picture></div>
+                  <div><p>好みが近い人の保存から</p><h3>休日に訪ねたいランチのお店</h3><span>サンプル市 こもれび町</span></div>
+                </article>
+                <p className="demo-caption">おすすめは、候補が十分に集まるまでは表示されない場合があります。</p>
+                <button className={`demo-save${demoSaved ? " is-saved" : ""}`} onClick={() => setDemoSaved(!demoSaved)} aria-pressed={demoSaved}>{demoSaved ? <Check size={18} aria-hidden="true" /> : <Plus size={18} aria-hidden="true" />}{demoSaved ? "行きたいリストに追加済み" : "おすすめを保存してみる"}</button>
               </div>
-              <p className="demo-status" aria-live="polite">{demoSaved ? "保存できました。もう一度押すと元に戻ります。" : "ボタンを押して、保存の操作を体験できます。"}</p>
+              <p className="demo-status" aria-live="polite">{demoSaved ? "見本の表示を切り替えました。実際のお店は保存されません。" : "ボタンは操作体験用です。実際のお店は保存されません。"}</p>
             </div>
           </div>
         </section>
@@ -239,7 +251,7 @@ export function LandingPage() {
           <h2 id="recommendation-title">あなたの「好き」が、<br className="mobile-break" />次の「行きたい」に。</h2>
           <p>好みの近い人が見つけたお店から、あなたに合う一軒を。<br className="desktop-break" />自分だけでは見つけられなかった、新しいおいしさに出会えます。</p>
           <button className="text-button" onClick={() => openAuth("signup", "recommendation_signup")}>自分だけのリストをつくる<ArrowRight size={19} aria-hidden="true" /></button>
-          <div className="privacy-note"><LockKeyhole size={15} aria-hidden="true" /><span>記録は非公開から。公開するのは、自分で選んだものだけ。</span></div>
+          <div className="privacy-note"><LockKeyhole size={15} aria-hidden="true" /><span>保存リスト・メモ・訪問記録は、あなたにだけ。</span></div>
         </section>
 
         <section className="section faq-section" aria-labelledby="faq-title">
@@ -277,7 +289,7 @@ export function LandingPage() {
           {modal === "privacy" && <>
             <DialogTitle className="dialog-title">プライバシーについて</DialogTitle>
             <DialogDescription className="dialog-description">あなたの「行きたい」を、大切に扱います。</DialogDescription>
-            <div className="dialog-prose"><p>個人の記録は、原則として非公開です。レビューやリストは、自分で選んだものだけ公開する設計です。</p><p>非公開の保存・評価もおすすめの計算に利用しますが、個人のメモ・訪問記録・評価明細をほかの人に表示しません。</p><p>店名・住所・ジャンルは、同じURLを保存する人の入力補助にも利用します。誰が保存・入力したかは表示しません。</p><p>ログイン時に、認証に必要な名前・メールアドレス等をFirebase Authenticationに保存します。「保存してはじめる」で入力したURLはログイン完了後にサーバーへ保存し、本人だけが見られるマイリストに追加します。保存デモは画面内のみで動作し、位置情報も取得しません。</p></div>
+            <div className="dialog-prose"><p>保存リスト、メモ、訪問記録、評価は非公開です。お店の名前とURLは、自分で選んでSNSに共有できます。</p><p>非公開の保存・評価もおすすめの計算に利用しますが、個人のメモ・訪問記録・評価明細をほかの人に表示しません。</p><p>店名・住所・ジャンルは、同じURLを保存する人の入力補助にも利用します。誰が保存・入力したかは表示しません。</p><p>ログイン時に、認証に必要な名前・メールアドレス等をFirebase Authenticationに保存します。「保存してはじめる」で入力したURLはログイン完了後にサーバーへ保存し、本人だけが見られるマイリストに追加します。保存デモは画面内のみで動作し、位置情報も取得しません。</p></div>
             <AnalyticsPrivacy />
           </>}
           {modal === "credits" && <>

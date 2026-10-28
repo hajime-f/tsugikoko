@@ -47,6 +47,8 @@ test("GA4はURLの機密情報を除き、ページ遷移・認証開始・初�
 test("GA4の停止設定は再読込後も有効で、解析を止めても登録できる", async ({ page, context }, info) => {
   await page.addInitScript(() => { if (!sessionStorage.getItem("test:analytics-initialized")) { localStorage.setItem("tsugikoko:analytics-disabled", "true"); sessionStorage.setItem("test:analytics-initialized", "1"); } });
   await page.goto("/?utm_source=disabled_source&gclid=disabled_click#private-hash", { referer: "https://example.org/private?secret=1" });
+  await page.getByRole("button", { name: "URLなしではじめる", exact: true }).click();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "保存してはじめる" }).click();
   await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
   await page.getByRole("button", { name: "プライバシーについて" }).click();
@@ -234,4 +236,21 @@ test("セッション保存が使えないときは流入情報を送らない",
   await page.goto("/?utm_source=google&gclid=Test_click", { referer: "https://example.org/private" });
   await expect.poll(() => events(page, "page_view").then(items => items.length)).toBe(1);
   expect((await events(page, "page_view"))[0][2]).toMatchObject({ page_location: "https://tsugikoko.com/", page_referrer: "" });
+});
+
+test("URLなしで登録でき、専用CTAだけを計測して入力URLは保存・送信しない", async ({ page }, info) => {
+  let saves = 0;
+  page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/places") saves++; });
+  await page.goto("/");
+  await expect.poll(() => events(page, "page_view").then(items => items.length)).toBe(1);
+  await page.getByRole("textbox", { name: "気になるお店や投稿のURL" }).fill("https://example.com/private-no-url-draft");
+  await page.getByRole("button", { name: "URLなしではじめる", exact: true }).click();
+  expect((await events(page, "cta_click")).map(item => item[2])).toEqual([{ button_id: "hero_signup_no_url", page_location: "https://tsugikoko.com/", page_title: "ツギココ", page_referrer: "", send_to: "G-TSUGIKOKOTEST" }]);
+  await expect(page.getByRole("dialog").locator(".draft-url")).toHaveCount(0);
+  await providerLogin(page, "Googleではじめる", `no-url-${info.project.name}-${Date.now()}@example.test`);
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByRole("heading", { name: "最初の「行きたい」を、ここに。" })).toBeVisible();
+  expect(saves).toBe(0);
+  expect(JSON.stringify(await commands(page))).not.toContain("private-no-url-draft");
+  expect((await events(page, "login_start"))[0][2]).toMatchObject({ method: "Google", button_location: "landing_dialog", auth_mode: "signup" });
 });

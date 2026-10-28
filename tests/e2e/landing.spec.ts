@@ -94,15 +94,56 @@ test("URLを検証し、入力を保持したままログイン案内を開く",
   expect(externalRequests).toEqual([]);
 });
 
-test("保存デモとFAQが動作する", async ({ page }) => {
+test("保存デモとFAQが動作する", async ({ page }, info) => {
+  const writes: string[] = [];
+  page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname.startsWith("/api/")) writes.push(request.url()); });
   await page.goto("/");
-  const save = page.getByRole("button", { name: "「行きたい」に追加してみる" });
+  const demo = page.locator(".demo-stage");
+  await expect(demo).toContainText("架空のお店・入力済みの記録例");
+  await expect(demo.getByRole("article", { name: "保存カードの見本" })).toContainText("カフェ巡り");
+  await expect(demo.getByRole("article", { name: "おすすめカードの見本" })).toBeVisible();
+  await expect(demo).toContainText("候補が十分に集まるまでは表示されない場合があります");
+  await demo.scrollIntoViewIfNeeded();
+  await expect.poll(() => demo.locator("img").evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  if (info.project.name === "mobile") {
+    await demo.evaluate(element => window.scrollTo({ top: scrollY + element.getBoundingClientRect().top, behavior: "instant" }));
+    await page.screenshot({ path: info.outputPath("list-preview.png"), scale: "css" });
+  } else {
+    await demo.screenshot({ path: info.outputPath("list-preview.png"), scale: "css" });
+  }
+  const save = page.getByRole("button", { name: "おすすめを保存してみる" });
   await save.click();
   await expect(page.getByRole("button", { name: "行きたいリストに追加済み" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "行きたいリストに追加済み" }).click();
   await expect(save).toHaveAttribute("aria-pressed", "false");
   await page.getByText("保存したお店は、ほかの人に見えますか？", { exact: true }).click();
-  await expect(page.locator("details[open]")).toContainText("あなたの記録は、はじめは非公開");
+  await expect(page.locator("details[open]")).toContainText("保存リスト、メモ、訪問記録、評価は非公開");
+  await page.getByText("どんなお店を登録できますか？", { exact: true }).click();
+  await expect(page.locator("details").filter({ hasText: "どんなお店を登録できますか？" })).toContainText("Instagram・Xの投稿内容は読み取らず");
+  expect(writes).toEqual([]);
+});
+
+test("URLなしの導線が最初の画面に収まり、保存前のURLを登録に引き継がない", async ({ page }, info) => {
+  await page.goto("/");
+  const secondary = page.getByRole("button", { name: "URLなしではじめる", exact: true });
+  const sizes = info.project.name === "mobile" ? [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }] : [{ width: 1440, height: 1000 }];
+  for (const size of sizes) {
+    await page.setViewportSize(size);
+    await page.reload();
+    await expect(secondary).toBeVisible();
+    await expect.poll(() => secondary.evaluate(element => { const rect = element.getBoundingClientRect(); return rect.top >= 0 && rect.bottom <= innerHeight; })).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`hero-${size.width}.png`), scale: "css" });
+  }
+  await page.getByRole("textbox", { name: "気になるお店や投稿のURL" }).fill("https://example.com/private-draft");
+  await page.getByRole("button", { name: "保存してはじめる" }).click();
+  await expect(page.getByRole("dialog")).toContainText("https://example.com/private-draft");
+  await page.keyboard.press("Escape");
+  await secondary.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog").locator(".draft-url")).toHaveCount(0);
+  await expect(page.getByRole("dialog")).not.toContainText("ログインが完了すると、このURL");
+  await expect(page.getByRole("button", { name: "Googleではじめる", exact: true })).toBeEnabled();
 });
 
 test("ナビゲーション・ログイン案内・写真クレジットが動作する", async ({ page }, testInfo) => {

@@ -9,7 +9,7 @@ const methods: Record<string, string> = { "google.com": "Google", "twitter.com":
 const campaignKeys = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const;
 const sessionKey = "tsugikoko:analytics-last-activity";
 const sessionTimeout = 30 * 60 * 1000;
-const ctaIds = ["header_login", "header_signup", "hero_save", "scene_signup", "recommendation_signup", "footer_signup", "menu_signup", "login_mode_signup", "login_mode_login"] as const;
+const ctaIds = ["header_login", "header_signup", "hero_save", "hero_signup_no_url", "scene_signup", "recommendation_signup", "footer_signup", "menu_signup", "login_mode_signup", "login_mode_login"] as const;
 export type AnalyticsCta = typeof ctaIds[number];
 export type AuthLocation = "landing_dialog" | "login_page";
 

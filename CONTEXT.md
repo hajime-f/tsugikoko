@@ -527,3 +527,19 @@ tsugikoko/
 - 実Chromeのスマホ・PC表示を目視確認。画面サイズ変更直後のモバイル撮影でChromeのタイル状の撮影崩れが出たため、サイズ変更後にページを再読込しCSSピクセルで撮影して正常画像を確認。長い要素の切り取り撮影では画面外の固定要素が写るため、スマホ見本は通常viewportの撮影へ変更。画面自体の横はみ出しなし。
 - Claudeレビュー`92f24833-b77b-4d99-9365-5d4b70dcc1c6`で差し戻し不要。任意提案の「どの見本を保存するか」をボタン文言へ反映し、`1c91bad6-d7d2-4bb9-9d67-e6af21e12e96`で結果を連絡。32件の解析E2E成功を条件に完了可との判定で、成功確認済み。
 - 確認用画像（Git対象外）: `.agent-bridge/runtime/landing-hero-mobile.png`、`landing-demo-mobile.png`、`landing-demo-desktop.png`。モバイル写真の順序変更は藤田さんへスクリーンショットを案内する。未追跡の既存画像・ロゴ・RESUMEは触っていない。
+
+## GoogleマップURLの自動取得（2026年10月28〜29日・実装済み／未コミット・未反映）
+
+- 藤田さんから「Google マップのリンクが入力されたとき、自動で情報を取れるようにしたいです」と依頼。保存制限と料金を説明し、本人から「表示時に取得する方式で進める（利用回数の上限付き）」と回答を得て実装した。先のトップページ改善の未コミット差分は保持。今回のコミット・本番反映の指示はない。
+- 現状は extraction/sources.ts の excludedHosts に google.com / google.co.jp / goo.gl があり、GoogleマップはURL保存のみ。processExtraction は取得情報を placeSources・places・本人の savedPlaces へ保存し、共有・推薦にも使う構成なので、Places APIの結果をそのまま流すことは避ける必要がある。
+- 公式資料を確認: https://developers.google.com/maps/documentation/places/web-service/policies 、https://cloud.google.com/maps-platform/terms/maps-service-terms 。Place IDの長期保存は可能。店名・住所などのAPIコンテンツの保存は原則制限され、緯度経度の30日キャッシュ例外を店名・住所へ広げない。Google Mapsの帰属表示も必要。
+- 公式料金 https://developers.google.com/maps/billing-and-pricing/pricing では、店名を含む Place Details Pro は月5,000回の無料枠、次の料金帯は1,000回17米ドル。IDのみの Text Search Essentials は無料。ただし短縮URL・CIDだけのURLなどをPlace IDへ確実に変換できるかは未検証。URLから一意に特定できない店舗を検索の先頭候補で自動確定しない。
+- 初期確認ではPlaces API未有効だった。10月29日、上限付き方式の承認とツール承認に基づいてPlaces APIを有効化し、同APIに用途を制限した専用キー `tsugikoko-places-server` を作成。Secret Managerの `tsugikoko-google-places-api-key` version 1へパイプ内で保管した（キー値をファイル・出力へ出していない）。実行アカウント `firebase-app-hosting-compute@tsugikoko.iam.gserviceaccount.com` と、公式 `firebase apphosting:secrets:grantaccess --backend tsugikoko --location asia-east1` によるバックエンド権限を設定済み。apphosting.yamlへRUNTIME限定のsecret参照と日100/月4000を追加したが、デプロイはしていない。
+- 実装: lib/places/google-maps.tsで許可URLとPlace ID/店名/CID/店舗ピン座標を判定。server/places/google-maps.tsで短縮URLのLocationだけを安全に解決し、Place DetailsまたはText Search Proを1表示で最大1回呼ぶ。必要項目だけ要求、CIDがある場合は応答URIとの照合、ない場合は同名の複数候補を拒否。CIDのみ・座標のみ・経路などは特定不能扱い。通常のHTML抽出のGoogle除外は維持する。
+- POST /api/places/[id]/google-detailsは本人の未削除の記録のみ対象、private no-store。送信前にFirestoreトランザクションでglobal日100/月4000（UTC）、user分6/日30、同一記録30秒の枠を確保。失敗・競合破棄も消費する。globalはserviceLimits/googlePlaces、個人はusers/{uid}/limits/googlePlaces。0設定で停止、設定による上限増加は不可。
+- Google由来の永続化はgooglePlaceIdのみ。制御用のgoogleLookupAt/Nonce/FailedAtも本人配下に置く。422の特定不能はFailedAtで以後のAPI・画面の再取得を止める。一時的な短縮先429/5xxや通信障害は503で再試行可能。同一記録30秒の文言は上限到達と区別。Googleの店名・住所・帰属情報はGooglePlaceSummaryの表示stateだけで、保存モデル・編集初期値・SNS共有・urlFacts・places・placeSources・推薦に渡さない。カードが画面に入る時だけ取得し、通常のポーリングでは再取得しない。本人が店名と住所を両方入力済みなら取得しない。
+- Google Mapsの帰属領域、第三者帰属リンク、取得失敗時の手入力案内を追加。privacy/terms、README更新。schema.tsのsourceLabelは専用URL判定へ寄せ、google.com/search等を地図扱いしない。
+- Claudeレビュー899f5007-a163-479b-85dd-f30d4828ca66で2指摘・3任意を受けすべて修正。再レビュー62da6c61-4bf1-4ccf-8720-fe8e34c169eaで短縮リンクの一時障害の恒久停止だけ指摘され修正・テスト追加。小さな修正なので再レビュー不要、結果のみ連絡するよう回答あり。
+- 検証成功: typecheck、単体27件、統合全42件、店舗E2E計36件（既存32件＋追加4件）、本番用build。最後のレビュー修正後にGoogleマップ統合7件・関連E2E4件・単体27件を再実行成功。E2E初回の新規4件は画面外カードの未取得を考慮していなかったためscrollIntoViewIfNeededを追加し解消。FailedAtの再表示で再取得されない検証も追加した。モバイル/PC実Chrome画像を確認済み（.agent-bridge/runtime/google-maps-mobile.png、google-maps-desktop.png）。lint設定なし。git diff --check成功。
+- Secret設定後、検証用の公開Place IDで実APIのPlace Detailsを1回呼び、店名・住所・GoogleマップURLの存在を確認した。キーと取得内容は出力・保存せず、成功boolだけ出力。本番Firestoreの店舗・制御カウンターは変更していない（この手動確認1回はアプリのカウンター外）。Text Searchと短縮URLの検証は模擬応答によるテストであり、実APIの全URL形式を網羅した確認ではない。
+- APIキー設定は完了しているので、次に藤田さんが公開を依頼したら、前のトップ導線改善と今回の変更を範囲確認してコミット・push・デプロイする。未追跡スクリーンショット・ロゴ・RESUMEを混ぜない。

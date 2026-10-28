@@ -14,6 +14,64 @@ const db = () => {
   return getFirestore(getApps()[0] ?? initializeApp({ projectId: "demo-tsugikoko" }));
 };
 
+test("Googleマップの情報を表示し、編集・保存データへ混ぜない", async ({ page }, info) => {
+  const email = `maps-${info.project.name}-${Date.now()}@example.test`;
+  let calls = 0;
+  await page.route("**/api/places/*/google-details", route => {
+    calls++;
+    return route.fulfill({ json: { place: { id: "ChIJMockStore000", name: "Googleから取得した見本店", address: "見本市みどり町1-2", uri: "https://maps.google.com/?cid=123", attributions: [{ name: "見本の情報提供元", uri: "https://example.com/" }] } } });
+  });
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", email);
+  const source = `https://maps.app.goo.gl/${info.project.name}${Date.now()}`;
+  await page.getByLabel("登録するお店や投稿のURL").fill(source);
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  const card = page.getByRole("article", { name: "Googleマップの保存URL", exact: true });
+  await card.scrollIntoViewIfNeeded();
+  await expect(card.getByRole("heading", { name: "Googleから取得した見本店" })).toBeVisible();
+  await expect(card.getByRole("link", { name: "Google Maps", exact: true })).toBeVisible();
+  await expect(card.getByRole("link", { name: "見本の情報提供元" })).toBeVisible();
+  await card.getByRole("button", { name: "編集", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("店名", { exact: true })).toHaveValue("");
+  await expect(dialog.getByLabel("住所", { exact: true })).toHaveValue("");
+  await dialog.getByLabel("自分用メモ").fill("自分だけのメモ");
+  await dialog.getByRole("button", { name: "変更を保存", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(card.getByRole("heading", { name: "Googleから取得した見本店" })).toBeVisible();
+  expect(calls).toBe(1);
+  const database = db();
+  const { uid } = await getAuth(getApps()[0]).getUserByEmail(email);
+  const records = await database.collection(`users/${uid}/savedPlaces`).get();
+  expect(records.docs[0].data()).toMatchObject({ name: "", address: "", note: "自分だけのメモ" });
+  expect(JSON.stringify(records.docs[0].data())).not.toContain("Googleから取得した見本店");
+  await page.screenshot({ path: `.agent-bridge/runtime/google-maps-${info.project.name}.png` });
+  // 特定不能の記録は再表示してもGoogle取得を再試行しない。
+  await records.docs[0].ref.update({ googleLookupFailedAt: Date.now() });
+  await page.reload();
+  await card.scrollIntoViewIfNeeded();
+  await expect(card).toContainText("「編集」から店名・住所を入力できます。");
+  await expect(card.getByRole("link", { name: "Google Maps", exact: true })).toHaveCount(0);
+  expect(calls).toBe(1);
+});
+
+test("Googleマップの上限到達時もURL保存と手入力を続けられる", async ({ page }, info) => {
+  await page.route("**/api/places/*/google-details", route => route.fulfill({ status: 429, json: { error: "Googleマップの情報取得は利用上限に達しました。URLは保存済みです。" } }));
+  await page.goto("/login");
+  await providerLogin(page, "Googleでログイン", `maps-limit-${info.project.name}-${Date.now()}@example.test`);
+  await page.getByLabel("登録するお店や投稿のURL").fill(`https://maps.app.goo.gl/limit${info.project.name}${Date.now()}`);
+  await page.getByRole("button", { name: "行きたいに保存", exact: true }).click();
+  const card = page.getByRole("article", { name: "Googleマップの保存URL", exact: true });
+  await card.scrollIntoViewIfNeeded();
+  await expect(card).toContainText("利用上限に達しました");
+  await card.getByRole("button", { name: "編集", exact: true }).click();
+  await page.getByRole("dialog").getByLabel("店名", { exact: true }).fill("自分で入力したお店");
+  await page.getByRole("dialog").getByLabel("住所", { exact: true }).fill("自分で入力した住所");
+  await page.getByRole("button", { name: "変更を保存", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "自分で入力したお店", exact: true })).toBeVisible();
+  await expect(page.getByText("利用上限に達しました", { exact: false })).toHaveCount(0);
+});
+
 function listFixtures(count: number): SavedPlace[] {
   return Array.from({ length: count }, (_, index) => ({
     id: (index + 1).toString(16).padStart(64, "0"), placeId: null,

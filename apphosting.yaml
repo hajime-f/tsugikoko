@@ -6,6 +6,16 @@ runConfig:
   cpu: 1
   memoryMiB: 512
 env:
+  # Googleマップの表示時取得。キーは実行時だけ使用し、ビルドやブラウザーへ渡さない。
+  - variable: GOOGLE_PLACES_API_KEY
+    secret: tsugikoko-google-places-api-key@1
+    availability: [RUNTIME]
+  - variable: GOOGLE_PLACES_DAILY_LIMIT
+    value: "100"
+    availability: [RUNTIME]
+  - variable: GOOGLE_PLACES_MONTHLY_LIMIT
+    value: "4000"
+    availability: [RUNTIME]
   # 外部サービスとFirebaseで設定済みの認証方法だけを表示する。
   - variable: NEXT_PUBLIC_AUTH_PROVIDERS
     value: "google.com,twitter.com,facebook.com"

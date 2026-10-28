@@ -37,6 +37,7 @@ function publicRecord(id: string, data: FirebaseFirestore.DocumentData): SavedPl
     lastAttemptAt: data.lastAttemptAt, deleted: data.deleted, deleteAt: data.deleteAt, visibility: "private",
     visitCount: data.visitCount ?? 0, latestVisit: data.latestVisit ?? null,
     listIds: data.listIds ?? [],
+    ...(data.googleLookupFailedAt ? { googleLookupFailed: true } : {}),
     // 本人が選んだジャンル（未設定を含む）は店名からの推測で置き換えない。
     genre: normalizeGenre(data.genre) ?? ((data.editedFields ?? []).includes("genre") ? null : genreFromText(data.name ?? "")),
   };

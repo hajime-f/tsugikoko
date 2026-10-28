@@ -131,6 +131,19 @@ E2Eテストはインストール済みのGoogle Chromeを使い、本番ビル�
 
 ### 登録・取得の詳細
 
+#### Googleマップの表示時取得
+
+- Googleマップの保存カードが画面に入ったとき、本人認証付きの `POST /api/places/[id]/google-details` でPlaces API (New)へ問い合わせます。画面外・ごみ箱・店名と住所が両方入力済みのカードは問い合わせません。同じカードの通常の一覧更新では再取得せず、画面を開き直すと再取得します。
+- 特定不能（422）になった記録には制御用の `googleLookupFailedAt` を付け、以後はサーバー・画面の両方で自動再取得を止めます。手入力と元リンクは利用できます。一時的な通信障害・上限到達はこの停止対象にせず、開き直した際に再試行できます。同じ記録を30秒以内に開き直した場合は、上限到達と区別して待機を案内します。
+- 対応URL形式を将来拡張するときは、対象の既存記録の `googleLookupFailedAt` を解除する移行も検討してください。現時点では利用者が解除する操作はありません。短縮先の429・5xxなどは恒久停止にせず、一時エラーとして扱います。
+- `maps.app.goo.gl` / `goo.gl/maps` は転送先ヘッダーだけを確認し、Googleマップの許可ホスト以外には接続しません。Place ID入りURLはPlace Details、店名入りURLはText Searchを使います。CIDがあれば応答のMaps URLと一致を確認し、CIDがない場合は同名の複数候補を自動選択しません。CIDだけ・座標だけ・経路・本文を読む必要があるリンク・特定できないリンクは手入力へ戻ります。GoogleマップのHTML本文を解析する処理はありません。
+- Google由来の店名・住所はカード内のGoogle Maps帰属表示付き領域で表示し、Reactの表示中の状態だけに置きます。ブラウザー保存・Firestore・共有文・編集初期値・`places` / `placeSources` / `urlFacts`・おすすめへ混ぜません。永続化するGoogle由来の値は本人の記録内の `googlePlaceId` だけです。取得制御用の時刻・nonceも本人の記録内に持ち、退会時は再帰削除の対象です。検索・ジャンル・並び替え・おすすめは従来の保存済み情報を使用します。
+- サイト全体でUTC日次100回、UTC月次4000回、本人ごとに1分6回・1日30回、同じカードは30秒に1回まで。Firestoreトランザクションで送信前に枠を予約し、失敗も消費します。1回の取得でPlaces APIを呼ぶのは最大1回です。`GOOGLE_PLACES_DAILY_LIMIT` / `GOOGLE_PLACES_MONTHLY_LIMIT` で上限を下げられます（0で停止、最大100/4000）。制御情報は `serviceLimits/googlePlaces` と `users/{uid}/limits/googlePlaces` に保存します。
+- 取得中の削除や別リクエストによる競合で表示結果を破棄した場合も、予約した回数は戻しません。特定不能なURLの初回確認も1回消費しますが、それ以降は自動停止により消費しません。
+- APIの必要項目だけを取得します。2026年10月28日の公式料金では、Place Details Pro / Text Search Proはそれぞれ月5000回の無料枠、超過後の最初の料金帯は1000回17 / 32米ドルです。本実装の上限はこのアプリの呼び出しだけを対象とし、同じ請求先の他プロジェクトの利用やGoogleの料金改定を含めた請求上限を保証しません。[料金](https://developers.google.com/maps/billing-and-pricing/pricing) / [保存・帰属表示の条件](https://developers.google.com/maps/documentation/places/web-service/policies)
+- 有効化にはGoogle Cloudの `places.googleapis.com` と、そのAPIだけを許可したサーバー用キーが必要です。`GOOGLE_PLACES_API_KEY` はSecret Manager経由でApp HostingのRUNTIMEだけに渡し、`NEXT_PUBLIC_` 変数・リポジトリ・ログへ入れません。キー未設定では取得せず、URL保存と手入力を案内します。既存のFirebase用ブラウザーキーを流用しません。
+- tsugikokoプロジェクトでは2026年10月29日にAPIと専用キーを設定済みです。`apphosting.yaml` は `tsugikoko-google-places-api-key@1` をRUNTIME限定で参照します。App HostingバックエンドへのSecretアクセスを公式CLIで付与し、実APIのPlace Details応答を1回確認しました（取得内容・キーはログやファイルへ保存せず、本番の店舗データも変更していません）。アプリの本番反映は別途必要です。
+
 - `/api/places`で登録と30件単位の一覧取得、`/api/places/[id]`で編集・再取得・ごみ箱・復元を行います。
 - カードには「再取得」ボタンを表示しません。店名が未入力の場合だけ「編集」を緑色のボタンで強調し、手入力を案内します。店名の保存後は通常の編集ボタンに戻ります。再取得API（`PATCH`の`retry`）は自動入力の対象URLに限って残しています。
 - マイリスト・ごみ箱は先頭30件を表示し、末尾の300px手前までスクロールすると次の30件を自動で読み込みます。追加取得は重複実行を防ぎ、失敗時は表示済みの店舗を残して末尾から再試行できます。「もっと見る」は手動操作・自動読み込み非対応環境用にも残します。通常一覧の定期更新・画面への復帰・編集後も読み込み済みのページ数を維持し、タブや検索条件を切り替える前の古い応答は反映しません。

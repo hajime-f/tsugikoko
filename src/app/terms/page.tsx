@@ -10,13 +10,14 @@ export const metadata: Metadata = {
 };
 
 export default function TermsPage() {
-  return <PrivacyDocument title="利用規約">
+  return <PrivacyDocument title="利用規約" updatedAt="2026年10月28日">
     <p>この利用規約（以下「本規約」）は、{SITE_OPERATOR}（以下「運営者」）が提供する「ツギココ」（以下「本サービス」）の利用条件を定めるものです。ご利用前に内容をご確認ください。</p>
     <section><h2>1. 本規約への同意</h2>
       <p>本サービスへのログインにより、利用者は本規約に同意したものとみなします。初めてのログインによる新規登録も同様です。本規約に同意いただけない場合は、ログインをお控えください。</p>
       <p>未成年の方は、親権者などの法定代理人の同意を得たうえでご利用ください。</p>
     </section>
     <section><h2>2. サービスの内容と利用料金</h2>
+      <p>Googleマップの店舗情報の表示にはGoogle Maps Platformを利用します。この情報の利用には、<a href="https://maps.google.com/help/terms_maps/" target="_blank" rel="noopener noreferrer">Googleマップ／Google Earthの追加利用規約</a>と<a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer">Google利用規約</a>も適用されます。取得回数の上限、リンクの形式、外部サービスの状況によって情報を表示できない場合があります。</p>
       <p>本サービスは、気になる飲食店や投稿のURLを保存し、店名・住所・メモ・訪問記録・評価などを管理するサービスです。保存・評価の傾向や選択した地域に応じて、おすすめの店舗を表示します。</p>
       <p>本サービスは、店舗の予約・注文・決済を仲介するものではありません。店舗やリンク先のサービスを利用する場合は、それぞれの利用条件に従ってください。</p>
       <p>現在の利用料金は無料です。通信費や外部サービスの利用にかかる費用は利用者の負担となります。有料機能を導入する場合は、料金と条件を事前に提示し、利用者の申込み・同意なく課金しません。</p>

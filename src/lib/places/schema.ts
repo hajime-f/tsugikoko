@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isGenre, normalizeGenre, type Genre } from "./genres";
+import { googleMapsUrl } from "./google-maps";
 // 旧ジャンルID（kissatenなど）を送る古い画面からの入力も、統合後のIDに置き換えて受け付ける。
 const genreInput = (message: string) => z.preprocess(value => typeof value === "string" ? normalizeGenre(value) ?? value : value, z.custom<Genre>(isGenre, message));
 
@@ -91,6 +92,7 @@ export type SavedPlace = {
   lastAttemptAt: number | null; deleted: boolean; deleteAt: number | null; visibility: "private";
   visitCount: number; latestVisit: VisitSummary | null; genre: Genre | null;
   listIds?: string[];
+  googleLookupFailed?: boolean;
 };
 export type PlaceList = { places: SavedPlace[]; nextCursor: string | null };
 // マイリストの検索条件。qは店名・住所・メモの部分一致、genreの"unset"はジャンル未設定。
@@ -113,6 +115,6 @@ export function sourceLabel(url: string) {
   if (host === "gnavi.co.jp" || host.endsWith(".gnavi.co.jp")) return "ぐるなび";
   if (host === "hotpepper.jp" || host.endsWith(".hotpepper.jp")) return "ホットペッパーグルメ";
   if (host === "retty.me" || host.endsWith(".retty.me")) return "Retty";
-  if (/^(maps\.)?google\.(com|co\.jp)$|^maps\.app\.goo\.gl$/.test(host.replace(/^www\./, ""))) return "Googleマップ";
+  if (googleMapsUrl(url)) return "Googleマップ";
   return host.replace(/^www\./, "");
 }

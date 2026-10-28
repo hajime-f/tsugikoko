@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { createPlaceSchema, type PlaceCollection, type PlaceList, type PlaceListQuery, type SavedPlace } from "@/lib/places/schema";
 
 import { VisitDialog } from "@/components/places/visit-dialog";
-import { MapAddressLink } from "@/components/ui/map-address-link";
+import { GooglePlaceSummary } from "@/components/places/google-place-summary";
 import { genreGroups, genres, isGenre, type Genre } from "@/lib/places/genres";
 
 const cardMotifs = [Coffee, UtensilsCrossed, MapPin, Bookmark];
@@ -70,7 +70,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
     if (!user) throw new Error("ログインし直してください。");
     const token = await user.getIdToken();
     const response = await fetch(`/api/places${path}`, {
-      ...init, cache: "no-store", signal: AbortSignal.timeout(20_000),
+      ...init, cache: "no-store", signal: AbortSignal.timeout(path.endsWith("/google-details") ? 55_000 : 20_000),
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
     const data = await response.json();
@@ -274,9 +274,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
           : !places.length && !error && !cursor ? <div className="places-empty"><div className="empty-illustration" aria-hidden="true"><span className="empty-circle" /><span className="empty-paper"><Coffee size={38} strokeWidth={1.3} /><i /><i /></span><span className="empty-pin"><Bookmark size={22} /></span></div><div className="empty-copy"><h3>{tab === "trash" ? "ごみ箱は空です。" : tab === "visited" ? "「行ってよかった」を、残そう。" : "最初の「行きたい」を、ここに。"}</h3><p>{tab === "trash" ? "削除した記録は、ここから元に戻せます。" : tab === "visited" ? "行きたいリストのお店から、訪問日や星の評価を残せます。" : "お店の公式サイトや、SNSで見つけた投稿。\n気になるURLから、リストをはじめましょう。"}</p>{tab === "visited" && <button className="text-button" onClick={() => setTab("saved")}>行きたいリストを見る</button>}{tab === "saved" && <a className="text-button" href="#add-place" onClick={() => sourceInput.current?.focus()}>URLを登録する<Plus size={16} /></a>}</div></div>
           : <div className="saved-place-grid">{places.map((place) => <article className="saved-place-card" data-tone={parseInt(place.id.slice(-4), 16) % 4} key={place.id} aria-label={place.name || `${place.sourceLabel}の保存URL`}>
             <div className="saved-place-top" data-genre={isGenre(place.genre) ? place.genre : undefined} data-genre-image={isGenre(place.genre) && genres[place.genre].image ? true : undefined}><PlaceArtwork id={place.id} genre={place.genre} /><span className="place-state">{place.deleted ? "ごみ箱" : place.visitCount > 0 ? "訪問済み" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>
-            <h3>{place.name || `${place.sourceLabel}の気になるお店`}</h3>
-            {place.address && <p className="place-address"><MapAddressLink name={place.name} address={place.address} /></p>}
-            {!place.name.trim() && !place.deleted && <p className="place-status-copy">{place.extraction === "pending" ? "URLは保存済みです。画面を閉じても取得処理は続きます。" : "URLは保存済みです。「編集」から店名・住所を入力できます。"}</p>}
+            <GooglePlaceSummary place={place} api={api} />
             {place.latestVisit && <p className="place-visit-summary"><Star size={16} aria-hidden="true" /><span>{place.latestVisit.rating === null ? "未評価" : `${place.latestVisit.rating} / 5`}<small>直近の訪問 {place.latestVisit.visitedOn.replaceAll("-", "/")} · {place.visitCount}回訪問</small></span></p>}
             {place.note && <p className="place-note">{place.note}</p>}
             <div className="place-collections">

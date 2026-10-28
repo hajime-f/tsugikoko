@@ -39,7 +39,7 @@ export function isPublicAddress(address: string) {
   return mapped ? !blocked.check(mapped[1], "ipv4") : !blocked.check(address, "ipv6");
 }
 
-export type FetchedPage = { status: number; contentType: string; body: string };
+export type FetchedPage = { status: number; contentType: string; body: string; location?: string };
 export type PageFetcher = (url: string, accept: string, maxBytes: number) => Promise<FetchedPage>;
 
 // 名前解決したアドレスを検証してから、そのアドレスへ接続する。リダイレクトは追跡しない。
@@ -59,7 +59,7 @@ export const safeFetch: PageFetcher = async (url, accept, maxBytes) => {
       },
     }, (response: IncomingMessage) => {
       const status = response.statusCode ?? 0, contentType = String(response.headers["content-type"] ?? "");
-      if (status < 200 || status >= 300) { response.resume(); resolve({ status, contentType, body: "" }); return; }
+      if (status < 200 || status >= 300) { response.resume(); resolve({ status, contentType, body: "", location: response.headers.location }); return; }
       const chunks: Buffer[] = []; let size = 0;
       response.on("data", (chunk: Buffer) => {
         size += chunk.byteLength;

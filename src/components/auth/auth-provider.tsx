@@ -5,7 +5,7 @@ import { getAdditionalUserInfo, linkWithPopup, onAuthStateChanged, reauthenticat
 import { getClientAuth } from "@/lib/firebase/client";
 import { authErrorMessage, createProvider, isProviderEnabled, type ProviderId } from "@/lib/auth/providers";
 import { claimPendingDraft, clearDraft } from "@/lib/auth/draft";
-import { trackSignUp } from "@/lib/analytics";
+import { trackGoogleAdsSignUp, trackSignUp } from "@/lib/analytics";
 
 type AuthContextValue = {
   user: User | null; loading: boolean; busy: boolean; error: string; providerIds: string[];
@@ -57,7 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login: (id) => perform(async () => {
       if (!isProviderEnabled(id)) throw { code: "auth/operation-not-allowed" };
       const result = await signInWithPopup(getClientAuth(), createProvider(id));
-      if (getAdditionalUserInfo(result)?.isNewUser) trackSignUp(id);
+      if (getAdditionalUserInfo(result)?.isNewUser) {
+        trackSignUp(id);
+        trackGoogleAdsSignUp(result);
+      }
     }),
     logout: () => perform(async () => {
       const uid = getClientAuth().currentUser?.uid;

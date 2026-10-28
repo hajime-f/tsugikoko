@@ -516,7 +516,7 @@ tsugikoko/
 - 実装コミット`eaedecb203285d96a165a7415e2c75df1fe939f0`をmainへpush済み。前回レビュー・本番反映済みのAdSenseメタタグとトップindex設定もGitへ記録した。未追跡のスクリーンショット・logo・RESUMEは含めていない。コミットのgit archiveを`/private/tmp/tsugikoko-analytics-dxevvrbi`へ展開し、本番へデプロイした。
 - 本番反映完了: Cloud Build `7fa6ef95-73ee-4cd9-93a6-0c8366b06bef` はSUCCESS（10/27 7:39:47 JST）。Firebase CLIでRollout complete / Deploy completeを確認。公開ドメインを一時Chromeで開き、実Googleタグを模擬したまま、本番測定ID、初回のUTMと外部origin、秘密クエリ・ハッシュ除外、CTA、スクロール4段階、停止設定の再読込後の維持、/privacyの新表記と更新日、トップindexとAdSenseメタタグ維持を検証して成功。JavaScript例外0件。検証イベントはGoogleへ送信していない。GA4管理画面での流入分類・実受信の集計結果は未確認で、反映後の実アクセスで確認する。過去の流入元を復元する変更ではない。
 
-## トップページの登録導線改善（2026年10月28日・未コミット／未反映）
+## トップページの登録導線改善（2026年10月28日実装・29日本番反映）
 
 - Claude Codeからの相談`c59f1f7a-572b-4625-bc47-423f0f03b286`について、藤田さん本人から「はい、お願いします」と実装・テスト・レビューまで承認を受けた。今回のコミット・push・デプロイは指示待ち。前回GA4改善の公開版はそのまま。
 - Instagram・Xは投稿の取得対象外だがURL保存は可能。同一URLの共通店名・住所・ジャンルがあれば初期値に使い、なければ手入力できる。公式サイトなども取得可能な情報だけ補完する。extraction/sources.ts、places/service.tsのcreatePlace/sharedFacts、URL正規化と実際のカード描画を確認し、FAQ・url-hint・手順02・注記を事実に揃えた。未実装のレビュー／リスト公開の説明も、非公開記録と店名・URLのSNS共有へ修正。
@@ -528,7 +528,7 @@ tsugikoko/
 - Claudeレビュー`92f24833-b77b-4d99-9365-5d4b70dcc1c6`で差し戻し不要。任意提案の「どの見本を保存するか」をボタン文言へ反映し、`1c91bad6-d7d2-4bb9-9d67-e6af21e12e96`で結果を連絡。32件の解析E2E成功を条件に完了可との判定で、成功確認済み。
 - 確認用画像（Git対象外）: `.agent-bridge/runtime/landing-hero-mobile.png`、`landing-demo-mobile.png`、`landing-demo-desktop.png`。モバイル写真の順序変更は藤田さんへスクリーンショットを案内する。未追跡の既存画像・ロゴ・RESUMEは触っていない。
 
-## GoogleマップURLの自動取得（2026年10月28〜29日・実装済み／未コミット・未反映）
+## GoogleマップURLの自動取得（2026年10月28〜29日・29日本番反映）
 
 - 藤田さんから「Google マップのリンクが入力されたとき、自動で情報を取れるようにしたいです」と依頼。保存制限と料金を説明し、本人から「表示時に取得する方式で進める（利用回数の上限付き）」と回答を得て実装した。先のトップページ改善の未コミット差分は保持。今回のコミット・本番反映の指示はない。
 - 現状は extraction/sources.ts の excludedHosts に google.com / google.co.jp / goo.gl があり、GoogleマップはURL保存のみ。processExtraction は取得情報を placeSources・places・本人の savedPlaces へ保存し、共有・推薦にも使う構成なので、Places APIの結果をそのまま流すことは避ける必要がある。
@@ -543,3 +543,28 @@ tsugikoko/
 - 検証成功: typecheck、単体27件、統合全42件、店舗E2E計36件（既存32件＋追加4件）、本番用build。最後のレビュー修正後にGoogleマップ統合7件・関連E2E4件・単体27件を再実行成功。E2E初回の新規4件は画面外カードの未取得を考慮していなかったためscrollIntoViewIfNeededを追加し解消。FailedAtの再表示で再取得されない検証も追加した。モバイル/PC実Chrome画像を確認済み（.agent-bridge/runtime/google-maps-mobile.png、google-maps-desktop.png）。lint設定なし。git diff --check成功。
 - Secret設定後、検証用の公開Place IDで実APIのPlace Detailsを1回呼び、店名・住所・GoogleマップURLの存在を確認した。キーと取得内容は出力・保存せず、成功boolだけ出力。本番Firestoreの店舗・制御カウンターは変更していない（この手動確認1回はアプリのカウンター外）。Text Searchと短縮URLの検証は模擬応答によるテストであり、実APIの全URL形式を網羅した確認ではない。
 - APIキー設定は完了しているので、次に藤田さんが公開を依頼したら、前のトップ導線改善と今回の変更を範囲確認してコミット・push・デプロイする。未追跡スクリーンショット・ロゴ・RESUMEを混ぜない。
+
+## 2件の分離コミット・本番反映（2026年10月29日）
+
+- 藤田さん本人から、レビュー済みのトップ導線とGoogleマップを別々のコミットにしてpush・デプロイし、本番確認後にGoogle広告の新規登録コンバージョンを実装するよう指示あり。上記節の「指示待ち」はこの依頼で解除された。
+- トップ導線は `73f18e8`（7ファイル）、Googleマップは `a6e2b9c2daee7c6482fd7e9ee052694c0aa29190`（17ファイル）。共通のREADME・CSS・CONTEXTも変更内容で分離し、mainへpush済み。未追跡スクリーンショット・public/images/logo/・RESUME.mdは含めていない。
+- a6e2b9cのgit archiveを `/private/tmp/tsugikoko-reviewed-77t9ic7n` に展開してデプロイ。Cloud Build `b54c7130-aedf-4ce6-8583-d5370d6a4df0` はSUCCESS（10/29 04:24:36 JST）、Firebase CLIのRollout completeとDeploy completeを確認。本番Cloud Runの最新readyリビジョンは `tsugikoko-build-2026-10-28-001`。
+- 本番Chromeで390x844のトップ副CTAが初期表示に収まり、登録ダイアログが開くこと、架空の見本、トップindex、privacyのGoogle Maps Platform記載を確認。Googleタグは模擬しイベントを送っていない。新しいgoogle-details APIは未認証401。
+- 認証後の実保存・Google取得も専用の一時UIDで検証しようとしたが、確認用custom tokenの署名が `auth/insufficient-permission` で拒否された。認証アカウント作成・店舗保存の前に停止したため、本番にテストユーザーやテスト記録は作られていない。署名権限の追加は行っていない。初回は検証スクリプトのFirestoreカスタム認証方式のエラーを直したが、アプリの問題ではない。認証後の本番E2Eは未確認として藤田さんへ伝えた。実Places APIのキーと応答は前節のローカル確認で成功済みであり、これを本番アプリの認証後確認と混同しない。
+
+## Google広告の新規登録コンバージョン（2026年10月29日・レビュー済み／未コミット・未反映）
+
+- 上記の藤田さん本人の指示により、公開確認の後に着手。Claudeからの依頼6ba5f412-6c03-4ade-921a-15e6df10cd39、補足6014a1b7-e8fa-4355-8fb5-b05291e8d704を実装範囲とする。今回のコンバージョン変更はコミット・push・デプロイせず、レビュー後も藤田さんの次の指示を待つ。
+- 認証成功時のisNewUser分岐にだけ広告conversionを追加。連携・本人確認・復元・既存ログインからは呼ばない。WeakSetで同じ認証結果の参照の再送を抑え、参照内容やUIDを送信／保存しない。停止・未設定・失敗時の後送もなし。
+- NEXT_PUBLIC_GOOGLE_ADS_SIGNUP_LABEL（英数字・下線・ハイフン1〜100文字）を受け取り、未設定は送信なし。送信先AW-18532065959/ラベルと既知のページURL・タイトル・空referrerだけを明示的に渡す。GA4設定とは独立し、既存解析停止設定を尊重。apphosting.yamlにはラベルのエントリを置かず未設定のまま（レビューで空値エントリの互換性懸念を避ける案を採用）。Google広告の管理画面、既存URLルール、アクション、カウント方法は変更していない。
+- AnalyticsPrivacyの説明と停止対象を更新し、GA4がなく広告ラベルだけある場合も停止UIを表示。共通のprivacy-documentは枠組みのため変更不要。/privacyの更新日は10月29日。
+- READMEでは、既存/homeのURLルールを新規登録の判定に使わずイベント方式とカウント1回を設定する手順を説明。「0件はSPAが原因」はClaudeの見立てで未検証なので、URLルールがSPAで常に動かないとは断定していない。
+- この作業のtypecheckでGoogleマップのreferenceのunion型推論エラーが出たため、ReturnType<typeof googleMapsReference>の型注釈1行を追加して解消した。実行時の処理変更はなく、公開済み2コミットは変更していない。この型注釈も未コミット差分としてレビューに含める。
+- Claudeレビュー44d9fc70-ca5a-42e9-a757-47a6d714fcdfで差し戻しなし。確認点は空のenv値の互換性と、前記型推論エラーが公開済みmainでも起きるか。空のenvエントリは削除し、ラベル確定後に追加する運用をREADMEへ記載した。Googleマップは公開したa6e2b9cのgit archiveに同じnode_modulesを接続して `tsc --noEmit --incremental false` を実行し成功。作業ツリーでも型注釈なしの非増分チェックは成功し、既存の増分キャッシュを使う通常typecheckではエラーを再現した。クリーンな公開コミットの型チェックは成功しており、急ぎの修正コミットは不要。増分チェックも安定させる明示型注釈1行は今回の未コミット差分に残した。
+- 検証成功: 通常typecheckと非増分typecheck、単体27件、ラベルありE2E38件（既存解析32＋広告6）、ラベルなし別ビルドE2E2件。両E2Eでbuild成功。ラベル未設定時の2件はありビルドでは意図的skip、別ビルドで実行成功した。認証エミュレーターと模擬Googleタグを使用し、本番へ成果を送っていない。lint設定なし。git diff --check成功。
+- 広告変更は未コミット・未push・未デプロイ。ラベル未作成／未設定であり、本番のGoogle広告コンバージョン送信はまだ有効になっていない。次は藤田さんの指示を待つ。
+
+## 広告コンバージョン実装の公開指示（2026年10月29日）
+
+- 藤田さん本人から `commit & push & deploy` の指示を受け、前節の公開待ちを解除。レビュー済みの広告実装・関連テスト・型注釈をコミットして反映する。ラベルは未設定のままで、成果イベントの送信は有効化しない。Google広告の管理画面は変更しない。
+- 既存の未追跡スクリーンショット・public/images/logo/・RESUME.mdは引き続き除外し、コミットのgit archiveからデプロイする。実施結果はデプロイ後に報告する。

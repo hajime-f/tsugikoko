@@ -44,7 +44,7 @@ export async function resolveGoogleMapsUrl(value: string, fetcher: PageFetcher =
 // 1回の表示につきPlaces APIは最大1回。内容は返却だけでキャッシュ・ログに保存しない。
 export async function lookupGooglePlace(url: string, storedId: string | undefined, key: string,
   options: { fetcher?: PageFetcher; request?: typeof fetch } = {}): Promise<GooglePlaceDetails> {
-  const reference = storedId && isGooglePlaceId(storedId) ? { id: storedId } : googleMapsReference(await resolveGoogleMapsUrl(url, options.fetcher));
+  const reference: ReturnType<typeof googleMapsReference> = storedId && isGooglePlaceId(storedId) ? { id: storedId } : googleMapsReference(await resolveGoogleMapsUrl(url, options.fetcher));
   if (!reference) throw unavailable();
   const id = reference.id;
   const endpoint = id ? `https://places.googleapis.com/v1/places/${encodeURIComponent(id)}?languageCode=ja` : "https://places.googleapis.com/v1/places:searchText";

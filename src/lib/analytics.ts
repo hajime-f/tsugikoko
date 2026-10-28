@@ -4,6 +4,9 @@ export const ANALYTICS_PREFERENCE_KEY = "tsugikoko:analytics-disabled";
 export const ANALYTICS_PREFERENCE_EVENT = "tsugikoko:analytics-preference";
 const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "";
 export const analyticsConfigured = /^G-[A-Z0-9]+$/.test(measurementId);
+const adsSignupLabel = process.env.NEXT_PUBLIC_GOOGLE_ADS_SIGNUP_LABEL ?? "";
+export const googleAdsSignupConfigured = /^[A-Za-z0-9_-]{1,100}$/.test(adsSignupLabel);
+const reportedAdsSignups = new WeakSet<object>();
 const pages: Record<string, string> = { "/": "ツギココ", "/login": "ログイン | ツギココ", "/home": "ホーム | ツギココ" };
 const methods: Record<string, string> = { "google.com": "Google", "twitter.com": "X", "facebook.com": "Facebook", "apple.com": "Apple" };
 const campaignKeys = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const;
@@ -158,6 +161,20 @@ function trackEvent(name: string, parameters: Record<string, string | number>) {
 
 export function trackSignUp(providerId: string) {
   if (Object.hasOwn(methods, providerId)) trackEvent("sign_up", { method: methods[providerId] });
+}
+
+// 認証結果は重複防止の参照としてだけ使い、内容をイベントやブラウザー保存へ渡さない。
+// GA4の設定有無とは独立。停止中・未設定・送信失敗時も後から送信し直さない。
+export function trackGoogleAdsSignUp(registration: object) {
+  try {
+    if (typeof window === "undefined" || reportedAdsSignups.has(registration)) return;
+    reportedAdsSignups.add(registration);
+    if (!googleAdsSignupConfigured || analyticsDisabled()) return;
+    const gtag = (window as AnalyticsWindow).gtag;
+    if (typeof gtag !== "function") return;
+    const pathname = Object.hasOwn(pages, window.location.pathname) ? window.location.pathname : "/";
+    gtag("event", "conversion", { send_to: `AW-18532065959/${adsSignupLabel}`, ...pageParameters(pathname) });
+  } catch { /* 広告の計測失敗で登録を失敗させない。 */ }
 }
 
 export function trackCtaClick(buttonId: AnalyticsCta) {

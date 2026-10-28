@@ -447,3 +447,12 @@ firebase emulators:exec --only auth,firestore --project demo-tsugikoko 'node --c
 今回の変更は規約と事前表示の追加です。同意時刻・規約版を保存する履歴APIは実装していません。既存のログイン状態の復元を新たな同意として記録したり、過去に同意済みだったと扱ったりする処理も追加していません。
 
 文案作成では[法務省の定型約款の説明](https://www.moj.go.jp/content/001255638.pdf)と[消費者庁の消費者契約条項に関する解説](https://www.caa.go.jp/policies/policy/consumer_system/consumer_contract_act/annotations/assets/consumer_system_cms203_230915_12.pdf)を参照しました。運営者の全面免責・任意の遡及変更は規定せず、法令に従う責任と事前周知・必要な個別同意を記載しています。
+
+## Google広告の新規登録コンバージョン
+
+- `signInWithPopup` が成功し、Firebaseの `isNewUser` がtrueのときだけ `conversion` を1回送ります。既存ユーザーのログイン、アカウント連携、本人確認、認証状態の復元からは呼び出しません。同じ認証結果の参照の重複送信はWeakSetで防ぎ、ブラウザー保存やユーザーIDによる履歴は作りません。未設定・停止中・失敗時に後から送り直しません。
+- 送信先は `AW-18532065959/${NEXT_PUBLIC_GOOGLE_ADS_SIGNUP_LABEL}`。ラベルは英数字・ハイフン・下線の1〜100文字のみ受け付け、空・不正な値なら送信しません。`apphosting.yaml`には未設定です。ラベルが確定したときに、`env`へこの変数名とラベルの`value`、`availability: [BUILD, RUNTIME]`を追加します。これは公開識別子であり秘密鍵ではありませんが、設定後はNext.jsの再ビルド・デプロイが必要です。GA4の測定IDが未設定でも、広告ラベルと既存のGoogleタグがあれば送れます。
+- 明示的な引数は送信先と、既知のページ種類を示す固定のURL・タイトル・空の参照元だけです。メール・ユーザーID・入力URL・クエリ・ハッシュ・個人記録・金額・transaction_id・user_dataは渡しません。拡張コンバージョンは使用しません。Googleタグ自身のCookie・クリック情報等の扱いとは区別します。[公式のコンバージョン計測](https://developers.google.com/tag-platform/devguides/conversions)
+- 既存の「このブラウザーでアクセス解析を停止する」を尊重します。この設定はGA4と今回の登録完了イベントを止めますが、既存のAWタグの読込・初期configそのものを止める変更ではありません。失敗や広告ブロックがログイン・登録を失敗させることはありません。
+- 有効化前に、Google広告側で新規登録向けのイベント方式のコンバージョンアクションと、カウント「1回」を設定し、そのイベントスニペットのラベルを使用してください。既存の `/home` URLルールを登録完了の判定には使いません。このアプリはSPA遷移を使い、`/home` は既存ユーザーにも表示されるため、新規登録の区別にはFirebaseの成功結果が必要です。既存URLルールやGA4のsign_upインポートを併用して登録成果を重複計上しないよう、計測対象を整理してください。広告画面のアクション変更・ラベル作成は今回の実装では行っていません。0件の原因がSPAであるという見立ては未検証であり、全URLルールがSPAで必ず動かないとは断定しません。[Google広告の設定方法](https://support.google.com/google-ads/answer/16560108)
+- 検証は `E2E_ANALYTICS=1 E2E_ADS_SIGNUP=1 npm run test:auth` でテスト用ラベルあり、`E2E_ANALYTICS=1 E2E_ADS_SIGNUP=0 npm run test:auth` で未設定を確認します。実Googleタグを模擬し、本番の広告へイベントを送りません。

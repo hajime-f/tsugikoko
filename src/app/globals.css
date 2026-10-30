@@ -186,6 +186,12 @@ h2 { font-size: clamp(25px, 2.4vw, 34px); font-weight: 750; letter-spacing: -.8p
 
 .dialog-overlay { position: fixed; inset: 0; z-index: 40; background: #14221b80; backdrop-filter: blur(3px); animation: fade-in 160ms ease-out; }
 .dialog-content { position: fixed; z-index: 50; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100% - 32px)); max-height: calc(100dvh - 40px); overflow-y: auto; padding: 38px 34px 30px; background: #fff; border-radius: 15px; box-shadow: 0 20px 80px #0002; animation: fade-in 180ms ease-out; }
+.fsq-autofill { padding: 14px; border: 1px solid #d7e3da; border-radius: 10px; background: #f5f8f5; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.fsq-autofill p { margin: 0 0 6px; }
+.fsq-candidate { border-top: 1px solid #d7e3da; padding-top: 10px; margin-top: 10px; }
+.fsq-warning { color: #785322; }
+.fsq-autofill small { display: block; margin-top: 10px; }
+.fsq-autofill a { text-decoration: underline; }
 .dialog-close { position: absolute; top: 7px; right: 7px; }
 .modal-brand { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: #eaf1e3; color: var(--green); margin-bottom: 22px; }
 .dialog-title { font-size: 22px; line-height: 1.65; font-weight: 750; margin: 5px 18px 9px 0; letter-spacing: -.5px; }

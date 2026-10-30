@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isGenre, normalizeGenre, type Genre } from "./genres";
 import { googleMapsUrl } from "./google-maps";
+import { fsqSelectionSchema } from "./foursquare";
 // 旧ジャンルID（kissatenなど）を送る古い画面からの入力も、統合後のIDに置き換えて受け付ける。
 const genreInput = (message: string) => z.preprocess(value => typeof value === "string" ? normalizeGenre(value) ?? value : value, z.custom<Genre>(isGenre, message));
 
@@ -43,6 +44,8 @@ export const editPlaceSchema = z.object({
   name: z.string().trim().max(120), address: z.string().trim().max(300), note: z.string().trim().max(2000),
   // 省略時は現在のジャンルを維持し、nullは本人が明示的に未設定へ戻したことを表す。
   genre: genreInput("ジャンルを選び直してください。").nullable().optional(),
+  expectedUpdatedAt: z.number().int().nonnegative().optional(),
+  foursquare: fsqSelectionSchema.optional(),
 }).strict();
 export const actionSchema = z.object({ action: z.enum(["retry", "trash", "restore"]) }).strict();
 
@@ -93,6 +96,8 @@ export type SavedPlace = {
   visitCount: number; latestVisit: VisitSummary | null; genre: Genre | null;
   listIds?: string[];
   googleLookupFailed?: boolean;
+  foursquare?: { id: string; version: string };
+  foursquareImported?: boolean;
 };
 export type PlaceList = { places: SavedPlace[]; nextCursor: string | null };
 // マイリストの検索条件。qは店名・住所・メモの部分一致、genreの"unset"はジャンル未設定。

@@ -11,11 +11,11 @@ export type BackfillResult = { scanned: number; candidates: number; writes: numb
 // 保存記録は変更しない。新しい共通情報を古い入力で上書きしない。何度実行しても同じ結果になる。
 export async function backfillUrlFacts({ apply, maxRecords = 20_000, maxWrites = 1_000 }: { apply: boolean; maxRecords?: number; maxWrites?: number }): Promise<BackfillResult> {
   const snapshot = await database().collectionGroup("savedPlaces")
-    .select("url", "deleted", "editedFields", "customDetails", "name", "address", "genre", "updatedAt").limit(maxRecords).get();
+    .select("url", "deleted", "editedFields", "customDetails", "name", "address", "genre", "updatedAt", "foursquareImported").limit(maxRecords).get();
   const byUrl = new Map<string, Facts>();
   for (const doc of snapshot.docs) {
     const data = doc.data();
-    if (data.deleted || typeof data.url !== "string" || !data.url) continue;
+    if (data.deleted || data.foursquareImported || typeof data.url !== "string" || !data.url) continue;
     const edited: string[] = data.editedFields ?? (data.customDetails ? ["name", "address"] : []);
     const updatedAt = typeof data.updatedAt === "number" ? data.updatedAt : 0;
     const values: Partial<Record<Field, string | null>> = {

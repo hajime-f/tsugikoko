@@ -3,6 +3,7 @@ import { actionSchema, editPlaceSchema, visitActionSchema, membershipSchema } fr
 import { setMembership } from "@/server/places/collections";
 import { limitWrites, listVisits, updatePlace, updateVisit } from "@/server/places/service";
 import { dispatchExtraction } from "@/server/places/dispatch";
+import { selectedFsq } from "@/server/places/foursquare";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const isVisit = body && typeof body.action === "string" && ["addVisit", "editVisit", "deleteVisit"].includes(body.action);
     const input = isVisit ? visitActionSchema.parse(body) : editPlaceSchema.or(actionSchema).parse(body);
     await limitWrites(uid);
-    const place = "visitId" in input ? await updateVisit(uid, id, input) : await updatePlace(uid, id, input);
+    const selection = "foursquare" in input ? input.foursquare : undefined;
+    const origin = selection ? await selectedFsq(uid, id, selection) : undefined;
+    const clean = "foursquare" in input ? (({ foursquare: _selection, ...rest }) => rest)(input) : input;
+    const place = "visitId" in clean ? await updateVisit(uid, id, clean) : await updatePlace(uid, id, clean, origin);
     if (place.extraction === "pending" && !place.deleted) await dispatchExtraction(uid, id).catch(() => console.error("place_dispatch_failed"));
     return jsonResponse({ place });
   } catch (error) { return errorResponse(error); }

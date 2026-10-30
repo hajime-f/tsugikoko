@@ -456,3 +456,32 @@ firebase emulators:exec --only auth,firestore --project demo-tsugikoko 'node --c
 - 既存の「このブラウザーでアクセス解析を停止する」を尊重します。この設定はGA4と今回の登録完了イベントを止めますが、既存のAWタグの読込・初期configそのものを止める変更ではありません。失敗や広告ブロックがログイン・登録を失敗させることはありません。
 - 有効化前に、Google広告側で新規登録向けのイベント方式のコンバージョンアクションと、カウント「1回」を設定し、そのイベントスニペットのラベルを使用してください。既存の `/home` URLルールを登録完了の判定には使いません。このアプリはSPA遷移を使い、`/home` は既存ユーザーにも表示されるため、新規登録の区別にはFirebaseの成功結果が必要です。既存URLルールやGA4のsign_upインポートを併用して登録成果を重複計上しないよう、計測対象を整理してください。2026年10月29日、Claude Codeから、藤田さんの承認のもとGoogle広告に「新規登録」（手動イベント・初回のみ・メイン）を作成し、既存の「申し込み」（/homeのURLルール、ID 7865383803）をサブアクションへ変更したとの確認を受けています。サブアクションの記録は「すべてのコンバージョン」等に残り得るため、旧イベントの送信停止とは区別します。0件の原因がSPAであるという見立ては未検証であり、全URLルールがSPAで必ず動かないとは断定しません。[Google広告の設定方法](https://support.google.com/google-ads/answer/16560108)
 - 検証は `E2E_ANALYTICS=1 E2E_ADS_SIGNUP=1 npm run test:auth` でテスト用ラベルあり、`E2E_ANALYTICS=1 E2E_ADS_SIGNUP=0 npm run test:auth` で未設定を確認します。実Googleタグを模擬し、本番の広告へイベントを送りません。
+
+### Foursquare OS Places の入力補助（恵比寿周辺で有効）
+
+GoogleマップのURLを保存すると、機能が有効な場合は編集画面を開く。リンクの店舗名とピン座標（表示中心の `@` は使わない）を地域カタログと照合し、候補が1件かつ報告・更新時期の問題がなければ空欄へ店名・住所・ジャンルを入れる。支店名の片側欠落は警告する。複数候補や未確認の報告、1年以上更新のない情報は自動入力せず、本人が候補を選ぶ。いずれも「変更を保存」で確定し、入力済み・入力操作中の項目は上書きしない。Google API の表示用データは使用しない。100m以内・名前一致/支店名差分という暫定条件であり、完全自動の店舗同定を保証しない。IDのみ・店舗ピンなしのURL、地域カタログ外、候補のない店舗は手入力できる。
+
+実行中に Foursquare の Iceberg を検索せず、サーバー内の地域データを検索する。手元の実データは恵比寿周辺のみ（2026-10-30取得、2,321行から飲食店等780行）。全国対応ではない。準備途中の実データは `.local-data/` に置く。公開用の780行は `data/foursquare/ebisu-2026-10-30.json` に固定し、NOTICE/ライセンスと一緒にバージョン管理する。公開ディレクトリへは置かない。Foursquareのトークンはアプリに渡さない。準備コマンドは出力を上書きせず、切り詰めたエクスポート・不明な出典・重複ID・50MB超を拒否する。
+
+```sh
+node --import tsx scripts/prepare-foursquare.mts input.json .local-data/foursquare.json
+FOURSQUARE_ENABLED=true FOURSQUARE_CATALOG_PATH=.local-data/foursquare.json npm run dev
+```
+
+入力JSONは Foursquare OS Places のエクスポートを `{ "source": "Foursquare OS Places (Apache-2.0)", "truncated": false, "rows": [...] }` で包む。日本の飲食カテゴリのみ採用し、閉店日あり・店名/住所等の不足を除く。`unresolved_flags` と `date_refreshed` は候補の警告に使用する。閉店日なしや最終更新日は営業中・全情報の正確性を保証しない。ジャンルはカテゴリの明示語だけから判定し、不明なら未設定とする。スナップショットは最大10万行・50MB、拡大時には分割・索引・更新運用を別途整備する。本番ではapphosting.yamlのBUILD/RUNTIME両方で有効化・カタログのパスを指定する。next.config.tsがファイルと版数ハッシュを確認し、欠落・破損時はビルドを止める。outputFileTracingIncludesでサーバーの配布物へ含める。対象は恵比寿周辺のみ。
+
+保存はサーバーが候補ID・カタログ版数・本人の記録・更新版数を検証する。出典、項目ごとの元の値/取り込み値を `foursquareSource` に保持する。取り込んだ記録は `foursquareImported` で識別し、後の手修正も含め `urlFacts` への転記・バックフィル対象から除く。共通店舗への登録やおすすめへの公開は行わない。画面と共有文に情報提供元を表示する。[NOTICE](public/licenses/foursquare-NOTICE.txt) と [Apache License 2.0](public/licenses/Apache-2.0.txt) を配布物に含める。住所の結合・ジャンルの変換・地域/カテゴリの選別はNOTICEに明記した。
+
+停止は `FOURSQUARE_ENABLED=false` で行う。停止後も各記録の「入力補助で取り込んだ情報を元に戻す」は使用でき、取り込んだままの項目だけを元に戻す。本人が後から変更した値、メモ、訪問履歴、リストは維持する。一括撤回は次のコマンドで、既定は件数確認のみ。実行には運営者のデータアクセス権が必要。2万件を超える場合は変更せず停止する。競合があれば終了コード2で通知するので再確認する。
+
+```sh
+node --conditions=react-server --import tsx scripts/withdraw-foursquare.mts
+# 件数を確認し、公開停止・撤回の指示を受けてから適用
+node --conditions=react-server --import tsx scripts/withdraw-foursquare.mts --apply
+```
+
+藤田さんの方針によりGoogleへの問い合わせを実装の前提にはしない。URL由来の情報による照合の許諾を確認済みとは扱わない。連携停止と、出典を追った撤回ができる構成にする。2026-10-31に藤田さんからcommit・push・deployの指示を受け、恵比寿周辺で有効化する。既存の保存記録を一括で変更する処理は行わない。
+
+保存時の候補再確認は、PATCH全体の更新制限を使い、候補表示の分10回枠を二重消費しない。再確認の障害・停止時には「候補の入力を取り消して手入力に戻る」で、自動入力したままの値だけを取り消し、本人が入力した項目とメモを保持して保存し直せる。何も取り込んでいなければ `foursquareImported` は付けない。一度取り込んだ記録は、撤回後も共通情報への転記対象には戻さない。
+
+検証: `E2E_AUTH_EMULATOR=1 E2E_FOURSQUARE=1 npx playwright test --workers=1` を認証・Firestoreエミュレーター内で実行すると、架空の地域カタログを用いてスマホ/PCの入力・保存・撤回・遅延応答・失敗時の手入力を確認する。実店舗データやFoursquareのトークンはテストで使わない。

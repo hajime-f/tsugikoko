@@ -576,3 +576,24 @@ tsugikoko/
 - apphosting.yamlへNEXT_PUBLIC_GOOGLE_ADS_SIGNUP_LABEL=X0s2CPyIg64dEKfF44RFをBUILD/RUNTIME両方で追加し、READMEを更新。実送信はしていない。今回の設定のコミット・push・デプロイは、別AIのメッセージを追加権限と扱わないAGENTS.mdに従って藤田さん本人へ確認する。
 - Claudeレビュー3756f312-473a-43a7-a71f-c1c843dfc000で問題なし。ラベルとavailabilityの一致を確認済み。任意提案に従い、READMEへGoogle広告側の設定完了の報告も反映した。
 - 藤田さん本人から改めて `commit & push & deploy` の指示を受けたため、ラベル設定もコミットして公開する。実際の新規登録によるGoogle広告側の受信確認は別途相談し、今回は配信バンドルのラベルと画面の動作を確認する。
+
+## Foursquare入力補助の検証・初版実装（2026年10月31日、未コミット）
+
+- 藤田さんの希望はGoogleマップの店名・住所・ジャンルをツギココの保存項目へ自動入力すること。Google APIからの値の永続化は行わず、Foursquare OS Placesを補完元として実データで検証した。Foursquare Portalのトークンは`.agent-bridge/runtime/foursquare-connection.txt`（Git対象外、0600）で管理し、アプリやログへ渡さない。
+- 実短縮リンクのLocationヘッダーから店名・店舗ピンを読み、Foursquareの「築地 すし好」（東京都渋谷区恵比寿南1-4-12、寿司）を候補にできた。距離約7m、近隣別支店は1115m。完全一致0件、支店名の省略を許す仮説で1件。支店名・建物・階数の欠落は残る。Googleページ本文/Places APIは照合で使用していない。検証結果は`.agent-bridge/runtime/open-places-evaluation.json`と`fsq-link-evaluation.json`。レビュー51952afe-cba8-4aa8-ba9d-b92f9db469baで妥当と確認。
+- 藤田さんは問い合わせを実装の前提にしない方針を明示した。許諾が確認済みとは扱わず、停止・撤回可能な構成を採用。「で、次は？」を受け、限定地域で一連の動作を通す初版を実装中。コミット・push・公開は今回未承認なので行わない。
+- `FOURSQUARE_ENABLED=true`と`FOURSQUARE_CATALOG_PATH`で有効化。地域カタログをサーバー内で検索するため実行中にIcebergやFoursquareのAPIへ利用者情報を送らない。`.local-data/foursquare-ebisu-v2.json`は恵比寿周辺2,321行から日本の飲食カテゴリ・閉店日なし・必須項目ありの780行を準備したもの。全国対応ではなく本番配置も未実施。カタログ検索のみの実測は約1ms（準備・リンク解決時間を含まない）。
+- 新規GoogleURLの保存後に有効時だけ編集画面を開き、候補1件・更新時期/flags問題なしなら空欄へ入力。支店名差は警告。複数候補・古い/報告付きは選択し、本人の保存ボタンで確定する。入力中/既存の値は上書きしない。店名の支店名欠落は両方向に対応。100mと名前の条件は暫定で、誤りのない自動同定を保証しない。
+- 取り込んだ項目のbefore/applied/editedBeforeを`foursquareSource`に保存し、後の手修正は撤回で消さない。取り込んだ記録は`foursquareImported`を残し、撤回後もurlFacts/backfillへの転記対象から除外する。共通店舗・おすすめへ公開しない。画面/共有に出典表示、public/licensesにNOTICE/Apache2を配置。privacyは10月31日へ更新。
+- `scripts/prepare-foursquare.mts`はカタログ準備用（入力の出典/非切り詰め/重複/上限検証、出力上書き拒否）。停止はenv false。個別撤回は停止中でも動き、`scripts/withdraw-foursquare.mts`は一括撤回用（既定dry-run・2万件超は変更せず停止・競合時exit2）。本番のデータ操作はしていない。
+- Claudeレビュー55d8c862-24dd-476c-82bd-4b7daf9dacd3の指摘を修正。実際に取り込んだ項目がない場合はフラグ/selectionを付けない。保存の再確認では候補表示の分10回枠を消費せずPATCHの更新制限を使う。失敗時は「候補の入力を取り消して手入力に戻る」で、未操作の候補値だけ戻して本人入力/メモを保ち保存可能。AbortSignal.anyは使わずabortリスナーを合成・解除。再レビューf9482a55-235e-458c-826f-1f44055bf748で指摘解消、新規指摘なし。
+- 検証成功: 型チェック、単体29件、統合46件（修正前）、修正後のFSQ統合5件、FSQ E2E6件（スマホ/PC、エミュレーター・架空カタログ、Googleタグ模擬）。E2Eビルド成功。既存places.spec.tsの回帰と最終画面確認は実行中で、結果は完了後追記する。Javaは`/opt/homebrew/opt/openjdk@21/bin`をPATHへ追加する。スクリーンショット・ロゴ・RESUME.mdの除外は維持。
+- 最終確認: 既存店舗E2E36件、アニメーション終了後のFSQ表示/保存/撤回E2E2件の再確認、出典時刻の維持を含むFSQ統合5件が成功。スマホ/PCスクリーンショットを目視確認済み。`.agent-bridge/runtime/foursquare-input-mobile.png` / `foursquare-input-desktop.png`。通常編集でimportedAtを更新しない追加修正もClaudeレビュー67274dac-81e0-4380-a558-637524ce62e5で問題なし。git diff --check成功。初版の実装・レビュー・検証は完了、未コミット・未push・未公開。本番カタログ配置と対象地域の拡充は別途必要。
+
+## Foursquare初版の公開指示（2026年10月31日）
+
+- 藤田さん本人の `commit & push &deploy` を受け、公開待ちを解除。レビュー済みの初版を恵比寿周辺で有効にする。全国拡充は含めない。
+- 配布時にカタログが欠落しないよう、検証済み780行（約175KB）をdata/foursquareへNOTICE/ライセンスと共に固定する。準備用データは.local-dataのまま除外するが、この公開用スナップショットだけは再現可能な配布のためコミットする。利用者の情報・Google APIの店舗情報・Foursquareトークンは含まない。
+- apphosting.yamlで有効化、next.config.tsで欠落/破損のビルド時検証とAPIのoutputFileTracingIncludesを追加する。公開設定の差分もClaudeレビュー後に進める。スクリーンショット、public/images/logo/、RESUME.md、接続トークンとブリッジの作業ファイルは引き続き除外する。
+
+- 公開設定レビュー336ab702-16d5-4fb6-8e11-2684b2893697で修正不要。カタログ有効の本番ビルドとstandaloneビルドが成功。3つのAPIトレースにカタログが含まれ、standalone/server.jsの作業ディレクトリに780行が元データと同一の内容で配置されることを確認。配布用サーバーを起動し、未認証POSTは401。欠落したカタログでは設定読み込みが失敗することも確認。公開後は別途本番の画面・API・配信を確認する。

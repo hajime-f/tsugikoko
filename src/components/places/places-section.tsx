@@ -11,6 +11,9 @@ import { createPlaceSchema, type PlaceCollection, type PlaceList, type PlaceList
 
 import { VisitDialog } from "@/components/places/visit-dialog";
 import { GooglePlaceSummary } from "@/components/places/google-place-summary";
+import { FoursquareAutofill } from "@/components/places/foursquare-autofill";
+import { googleMapsUrl } from "@/lib/places/google-maps";
+import type { FsqCandidate } from "@/lib/places/foursquare";
 import { genreGroups, genres, isGenre, type Genre } from "@/lib/places/genres";
 
 const cardMotifs = [Coffee, UtensilsCrossed, MapPin, Bookmark];
@@ -53,6 +56,12 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
   const [modal, setModal] = useState<{ mode: "edit" | "trash"; place: SavedPlace } | null>(null);
   const [visitDialog, setVisitDialog] = useState<{ place: SavedPlace; mode: "add" | "history" } | null>(null);
   const [fields, setFields] = useState<{ name: string; address: string; note: string; genre: Genre | null }>({ name: "", address: "", note: "", genre: null });
+  const [fsqSelection, setFsqSelection] = useState<{ id: string; version: string } | null>(null);
+  const [fsqLoading, setFsqLoading] = useState(false);
+  const touched = useRef(new Set<string>());
+  const fieldsRef = useRef(fields); fieldsRef.current = fields;
+  const fsqDraft = useRef<Partial<Record<"name" | "address" | "genre", { before: string | null; applied: string | null }>>>({});
+  const [fsqDismissed, setFsqDismissed] = useState(false);
   const [modalError, setModalError] = useState("");
   const locked = useRef(false);
   const attemptedDraft = useRef("");
@@ -69,13 +78,18 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
   const api = useCallback(async <T,>(path = "", init?: RequestInit): Promise<T> => {
     if (!user) throw new Error("ログインし直してください。");
     const token = await user.getIdToken();
+    const controller = new AbortController(), abort = () => controller.abort();
+    const signals = [AbortSignal.timeout(path.endsWith("/google-details") ? 55_000 : 20_000), ...(init?.signal ? [init.signal] : [])];
+    for (const signal of signals) { if (signal.aborted) abort(); else signal.addEventListener("abort", abort, { once: true }); }
+    try {
     const response = await fetch(`/api/places${path}`, {
-      ...init, cache: "no-store", signal: AbortSignal.timeout(path.endsWith("/google-details") ? 55_000 : 20_000),
+      ...init, cache: "no-store", signal: controller.signal,
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     });
     const data = await response.json();
     if (!response.ok) throw Object.assign(new Error(data.error || "処理に失敗しました。もう一度お試しください。"), { status: response.status });
     return data as T;
+    } finally { for (const signal of signals) signal.removeEventListener("abort", abort); }
   }, [user]);
 
   const receiveCollections = useCallback((lists: PlaceCollection[]) => {
@@ -192,7 +206,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
     setSaveFailed(false);
     const saved = await perform(async () => {
       if (automatic) setMessage("ログイン前に入力したURLを保存しています...");
-      const result = await api<{ place: SavedPlace; duplicate: boolean; restored: boolean }>("", { method: "POST", body: JSON.stringify(parsed.data) });
+      const result = await api<{ place: SavedPlace; duplicate: boolean; restored: boolean; completeDetails?: boolean }>("", { method: "POST", body: JSON.stringify(parsed.data) });
       if (!active.current) return;
       setSavedPlace(result.place);
       setMessage(result.restored ? "ごみ箱からマイリストに戻しました。" : result.duplicate ? "このURLは登録済みです。保存済みのお店をご確認ください。" : automatic ? "ログイン前のURLを「行きたい」に保存しました。" : "「行きたい」に保存しました。");
@@ -200,6 +214,11 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       const destination = result.place.visitCount > 0 ? "visited" : "saved";
       clearConditions();
       if (tab !== destination) setTab(destination); else if (!searching) await reload();
+      if (active.current && result.completeDetails) {
+        touched.current.clear(); fsqDraft.current = {}; setFsqDismissed(false); setFsqSelection(null); setFsqLoading(false);
+        setFields({ name: result.place.name, address: result.place.address, note: result.place.note, genre: result.place.genre });
+        setModalError(""); setModal({ mode: "edit", place: result.place });
+      }
     });
     if (active.current && !saved) setSaveFailed(true);
   }, [api, onSaved, perform, reload, tab, clearConditions, searching]);
@@ -219,7 +238,33 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       await reload();
     }, action === "trash");
   }
-  function edit(place: SavedPlace) { setFields({ name: place.name, address: place.address, note: place.note, genre: isGenre(place.genre) ? place.genre : null }); setModalError(""); setModal({ mode: "edit", place }); }
+  function edit(place: SavedPlace) { touched.current.clear(); fsqDraft.current = {}; setFsqDismissed(false); setFsqSelection(null); setFsqLoading(false); setFields({ name: place.name, address: place.address, note: place.note, genre: isGenre(place.genre) ? place.genre : null }); setModalError(""); setModal({ mode: "edit", place }); }
+  function fillCandidate(candidate: FsqCandidate, version: string) {
+    const next = { ...fieldsRef.current }; let applied = false;
+    for (const field of ["name", "address", "genre"] as const) {
+      if (!next[field] && candidate[field] && !touched.current.has(field)) {
+        fsqDraft.current[field] = { before: next[field], applied: candidate[field] }; applied = true;
+        if (field === "genre") next.genre = candidate.genre; else next[field] = candidate[field];
+      }
+    }
+    if (!applied) return false;
+    fieldsRef.current = next; setFields(next);
+    setFsqSelection({ id: candidate.id, version });
+    return true;
+  }
+  function discardFsqDraft() {
+    setFields(current => {
+      const next = { ...current };
+      for (const field of ["name", "address", "genre"] as const) {
+        const draft = fsqDraft.current[field];
+        if (draft && !touched.current.has(field) && next[field] === draft.applied) {
+          if (field === "genre") next.genre = isGenre(draft.before) ? draft.before : null; else next[field] = draft.before ?? "";
+        }
+      }
+      return next;
+    });
+    setFsqSelection(null); setFsqDismissed(true); setFsqLoading(false); setModalError("");
+  }
 
   return <>
     <section className="place-register" id="add-place" aria-labelledby="register-title">
@@ -275,6 +320,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
           : <div className="saved-place-grid">{places.map((place) => <article className="saved-place-card" data-tone={parseInt(place.id.slice(-4), 16) % 4} key={place.id} aria-label={place.name || `${place.sourceLabel}の保存URL`}>
             <div className="saved-place-top" data-genre={isGenre(place.genre) ? place.genre : undefined} data-genre-image={isGenre(place.genre) && genres[place.genre].image ? true : undefined}><PlaceArtwork id={place.id} genre={place.genre} /><span className="place-state">{place.deleted ? "ごみ箱" : place.visitCount > 0 ? "訪問済み" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>
             <GooglePlaceSummary place={place} api={api} />
+            {place.foursquare && <p className="place-status-copy">情報提供：<a href="/licenses/foursquare-NOTICE.txt" target="_blank" rel="noopener noreferrer">Foursquare OS Places</a></p>}
             {place.latestVisit && <p className="place-visit-summary"><Star size={16} aria-hidden="true" /><span>{place.latestVisit.rating === null ? "未評価" : `${place.latestVisit.rating} / 5`}<small>直近の訪問 {place.latestVisit.visitedOn.replaceAll("-", "/")} · {place.visitCount}回訪問</small></span></p>}
             {place.note && <p className="place-note">{place.note}</p>}
             <div className="place-collections">
@@ -286,7 +332,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
             <div className="place-visit-actions">{!place.deleted && <button className="button button-dark" disabled={busy} onClick={() => setVisitDialog({ place, mode: "add" })}><Check size={16} />{place.visitCount > 0 ? "再訪を記録" : "行ってきた"}</button>}{place.visitCount > 0 && <button className="text-button" disabled={busy} onClick={() => setVisitDialog({ place, mode: "history" })}>訪問履歴（{place.visitCount}）</button>}</div>
             <div className="place-actions">{place.deleted ? <button disabled={busy} onClick={() => void action(place, "restore")}><RotateCcw size={15} />元に戻す</button> : <>
               <button className={!place.name.trim() ? "place-edit-prominent" : undefined} disabled={busy} onClick={() => edit(place)}><Pencil size={15} />編集</button>
-              <SharePlaceButton name={place.name} url={place.url} disabled={busy} />
+              <SharePlaceButton name={place.name} url={place.url} disabled={busy} foursquare={Boolean(place.foursquare)} />
               <button disabled={busy} aria-label={`${place.name || place.sourceLabel}をごみ箱へ移す`} onClick={() => { setModalError(""); setModal({ mode: "trash", place }); }}><Trash2 size={15} />削除</button>
             </>}</div>
           </article>)}</div>}
@@ -313,22 +359,30 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
     <Dialog open={Boolean(modal)} onOpenChange={(open) => { if (!open && !busy) setModal(null); }}>
       <DialogContent>
         <DialogTitle className="dialog-title">{modal?.mode === "edit" ? "お店の情報を編集" : "ごみ箱へ移しますか？"}</DialogTitle>
-        <DialogDescription className="dialog-description">{modal?.mode === "edit" ? "すべて任意です。店名・住所・ジャンルは、同じURLを保存する人の入力補助にも使います。自分用メモは共有しません。本人の編集は自動取得で上書きされません。" : "30日間は元に戻せます。期間を過ぎると、この保存記録は削除されます。"}</DialogDescription>
+        <DialogDescription className="dialog-description">{modal?.mode === "edit" ? fsqSelection || modal.place.foursquareImported ? "入力内容を確認して保存してください。このお店の入力補助で取り込んだ情報は、自分の記録に保存します。入力済みの項目は上書きしません。" : "すべて任意です。店名・住所・ジャンルは、同じURLを保存する人の入力補助にも使います。自分用メモは共有しません。本人の編集は自動取得で上書きされません。" : "30日間は元に戻せます。期間を過ぎると、この保存記録は削除されます。"}</DialogDescription>
         {modal?.mode === "edit" ? <form className="place-edit-form" onSubmit={(event) => { event.preventDefault(); void perform(async () => {
           // ジャンルを操作しなかった場合、未取得の値を本人の指定として固定しない。
           const { genre, ...details } = fields;
-          await api(`/${modal.place.id}`, { method: "PATCH", body: JSON.stringify({ ...details, ...(genre !== (modal.place.genre ?? null) ? { genre } : {}) }) });
+          if (fsqLoading || busy) return;
+          await api(`/${modal.place.id}`, { method: "PATCH", body: JSON.stringify({ ...details, expectedUpdatedAt: modal.place.updatedAt,
+            ...(fsqSelection ? { foursquare: fsqSelection } : {}), ...(genre !== (modal.place.genre ?? null) ? { genre } : {}) }) });
           if (!active.current) return; setModal(null); setMessage("変更を保存しました。"); await reload();
         }, true); }}>
-          <label>店名<input value={fields.name} maxLength={120} onChange={(event) => setFields({ ...fields, name: event.target.value })} /></label>
-          <label>住所<input value={fields.address} maxLength={300} onChange={(event) => setFields({ ...fields, address: event.target.value })} /></label>
-          <div className="place-edit-field"><label htmlFor="place-genre">ジャンル</label><select id="place-genre" value={fields.genre ?? ""} disabled={busy} onChange={(event) => setFields({ ...fields, genre: isGenre(event.target.value) ? event.target.value : null })}>
+          {!fsqDismissed && googleMapsUrl(modal.place.url) && (!modal.place.name || !modal.place.address || !modal.place.genre) && <FoursquareAutofill key={modal.place.id} id={modal.place.id} api={api} onCandidate={fillCandidate} onLoading={setFsqLoading} />}
+          {fsqSelection && <button type="button" className="text-button" disabled={busy} onClick={discardFsqDraft}>候補の入力を取り消して手入力に戻る</button>}
+          <label>店名<input value={fields.name} maxLength={120} onChange={(event) => { touched.current.add("name"); setFields({ ...fields, name: event.target.value }); }} /></label>
+          <label>住所<input value={fields.address} maxLength={300} onChange={(event) => { touched.current.add("address"); setFields({ ...fields, address: event.target.value }); }} /></label>
+          <div className="place-edit-field"><label htmlFor="place-genre">ジャンル</label><select id="place-genre" value={fields.genre ?? ""} disabled={busy} onChange={(event) => { touched.current.add("genre"); setFields({ ...fields, genre: isGenre(event.target.value) ? event.target.value : null }); }}>
             <option value="">未設定</option>
             {genreGroups.map(group => <optgroup key={group.label} label={group.label}>{group.options.map(genre => <option key={genre} value={genre}>{genres[genre].label}</option>)}</optgroup>)}
           </select></div>
           <label>自分用メモ<textarea rows={4} value={fields.note} maxLength={2000} placeholder="行ってみたい理由や、気になるメニューなど" onChange={(event) => setFields({ ...fields, note: event.target.value })} /></label>
           {modalError && <p className="auth-error" role="alert">{modalError}</p>}
-          <button type="submit" className="button button-dark" disabled={busy}>{busy ? "保存しています..." : "変更を保存"}</button>
+          <button type="submit" className="button button-dark" disabled={busy || fsqLoading}>{busy ? "保存しています..." : "変更を保存"}</button>
+          {modal.place.foursquare && <button type="button" className="text-button" disabled={busy || fsqLoading} onClick={() => { void perform(async () => {
+            await api(`/${modal.place.id}/foursquare`, { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: modal.place.updatedAt }) });
+            if (!active.current) return; setModal(null); setMessage("入力補助で取り込んだ情報を元に戻しました。後から編集した項目は保持しています。"); await reload();
+          }, true); }}>入力補助で取り込んだ情報を元に戻す</button>}
         </form> : <><p className="trash-place-name">{modal?.place.name || modal?.place.sourceLabel}</p>{modalError && <p className="auth-error" role="alert">{modalError}</p>}<div className="trash-confirm-actions"><button className="button button-login" disabled={busy} onClick={() => setModal(null)}>キャンセル</button><button className="button button-dark" disabled={busy} onClick={() => { if (modal) void action(modal.place, "trash"); }}>ごみ箱へ移す</button></div></>}
       </DialogContent>
     </Dialog>

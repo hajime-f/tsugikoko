@@ -10,6 +10,7 @@ import { factsSchema } from "@/server/extraction/parser";
 import { genreFromText, normalizeGenre, type Genre } from "@/lib/places/genres";
 import { activeListIds, collectionsOf, collectionsRef, getCollections } from "./collections";
 import type { PlaceCollection } from "@/lib/places/schema";
+import type { FsqProvenance, FsqRow } from "@/lib/places/foursquare";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const records = (uid: string) => database().collection("users").doc(uid).collection("savedPlaces");
@@ -38,6 +39,8 @@ function publicRecord(id: string, data: FirebaseFirestore.DocumentData): SavedPl
     visitCount: data.visitCount ?? 0, latestVisit: data.latestVisit ?? null,
     listIds: data.listIds ?? [],
     ...(data.googleLookupFailedAt ? { googleLookupFailed: true } : {}),
+    ...(data.foursquareSource ? { foursquare: { id: data.foursquareSource.id, version: data.foursquareSource.version } } : {}),
+    ...(data.foursquareImported ? { foursquareImported: true } : {}),
     // 本人が選んだジャンル（未設定を含む）は店名からの推測で置き換えない。
     genre: normalizeGenre(data.genre) ?? ((data.editedFields ?? []).includes("genre") ? null : genreFromText(data.name ?? "")),
   };
@@ -126,7 +129,7 @@ const PAGE_SIZE = 30;
 const collator = new Intl.Collator("ja", { sensitivity: "base", numeric: true });
 const searchable = (text: string) => text.normalize("NFKC").toLowerCase();
 // 一覧に必要な項目だけを読み、訪問履歴の本文は読まない。
-const listFields = ["placeId", "url", "sourceUrls", "name", "address", "note", "customDetails", "extraction", "reason", "sourceLabel", "fetchedAt", "createdAt", "updatedAt", "lastAttemptAt", "deleted", "deleteAt", "visitCount", "latestVisit", "genre", "editedFields", "listIds"];
+const listFields = ["placeId", "url", "sourceUrls", "name", "address", "note", "customDetails", "extraction", "reason", "sourceLabel", "fetchedAt", "createdAt", "updatedAt", "lastAttemptAt", "deleted", "deleteAt", "visitCount", "latestVisit", "genre", "editedFields", "listIds", "foursquareSource", "foursquareImported"];
 const filterCursorSchema = z.object({ n: z.string().max(120), c: z.number().int().nonnegative(), i: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 type SortKey = z.infer<typeof filterCursorSchema>;
 
@@ -238,16 +241,16 @@ export async function updateVisit(uid: string, id: string, input: VisitAction) {
   });
 }
 
-export async function updatePlace(uid: string, id: string, changes: { name: string; address: string; note: string; genre?: Genre | null } | { action: "retry" | "trash" | "restore" }) {
+export async function updatePlace(uid: string, id: string, changes: { name: string; address: string; note: string; genre?: Genre | null; expectedUpdatedAt?: number } | { action: "retry" | "trash" | "restore" }, origin?: { row: FsqRow; version: string }) {
   if (!/^[a-f0-9]{64}$/.test(id)) throw new ApiError(404, "保存したお店が見つかりません。");
   return database().runTransaction(async (tx) => {
     const ref = records(uid).doc(id), doc = await tx.get(ref);
     if (!doc.exists) throw new ApiError(404, "保存したお店が見つかりません。");
     const place = publicRecord(id, doc.data()!);
     if (expired(place)) throw new ApiError(404, "ごみ箱の保存期間が過ぎています。");
-    const now = Date.now();
+    const now = Math.max(Date.now(), place.updatedAt + 1);
     if (place.deleted && (!("action" in changes) || changes.action !== "restore")) throw new ApiError(409, "ごみ箱から戻してから編集してください。");
-    let patch: Partial<SavedPlace> & { purgeAt?: Timestamp | null; attempts?: number; editedFields?: string[]; refresh?: boolean; queuedAt?: number | null } = { updatedAt: now };
+    let patch: Partial<SavedPlace> & { foursquareSource?: FsqProvenance | null; purgeAt?: Timestamp | null; attempts?: number; editedFields?: string[]; refresh?: boolean; queuedAt?: number | null } = { updatedAt: now };
     if ("action" in changes) {
       if (changes.action === "retry") {
         if (!extractionTarget(place.url)) throw new ApiError(422, "このサイトは自動入力の対象外です。店名・住所を入力してください。");
@@ -257,12 +260,32 @@ export async function updatePlace(uid: string, id: string, changes: { name: stri
         patch = { ...patch, deleted: true, deleteAt: now + 30 * 86_400_000, purgeAt: Timestamp.fromMillis(now + 30 * 86_400_000) };
       } else patch = { ...patch, deleted: false, deleteAt: null, purgeAt: null };
     } else {
+      if (changes.expectedUpdatedAt !== undefined && changes.expectedUpdatedAt !== place.updatedAt) throw new ApiError(409, "別の画面で更新されました。一度閉じて開き直してください。");
+      if (origin && changes.expectedUpdatedAt === undefined) throw new ApiError(400, "店舗候補を開き直してください。");
       const editedFields = new Set<string>(doc.get("editedFields") ?? (place.customDetails ? ["name", "address"] : []));
+      const previousEdited = new Set(editedFields);
       for (const field of ["name", "address"] as const) if (changes[field] !== place[field]) editedFields.add(field);
-      const { genre, ...fields } = changes;
+      const { genre, expectedUpdatedAt: _expected, ...fields } = changes;
       patch = { ...patch, ...fields, customDetails: true };
       if (genre !== undefined) { patch.genre = genre; editedFields.add("genre"); }
       patch.editedFields = [...editedFields];
+      const previous = doc.get("foursquareSource") as FsqProvenance | undefined;
+      const sourceFields: FsqProvenance["fields"] = { ...previous?.fields };
+      let importedNow = false;
+      for (const field of ["name", "address", "genre"] as const) {
+        const value = changes[field];
+        if (value === undefined) continue;
+        // 後から本人が修正した値は撤回で消さない。
+        if (sourceFields[field] && value !== sourceFields[field]!.applied) delete sourceFields[field];
+        if (origin && value === origin.row[field] && value !== place[field]) { importedNow = true; sourceFields[field] = {
+          before: previous?.fields[field] ? previous.fields[field]!.before : place[field], applied: value,
+          editedBefore: previous?.fields[field]?.editedBefore ?? previousEdited.has(field),
+        }; }
+      }
+      if (previous || origin) patch.foursquareSource = Object.keys(sourceFields).length
+        ? { id: importedNow ? origin!.row.id : previous!.id, version: importedNow ? origin!.version : previous!.version,
+          importedAt: importedNow ? now : previous!.importedAt, fields: sourceFields } : null;
+      if (importedNow) patch.foursquareImported = true;
       // 今回の編集で実際に変えた、空でない店名・住所・ジャンルだけを同じURLの共通情報へ反映する。
       // 自動入力や共有で受け取ったままの値・メモ・「未設定」は再投稿しない（他人の新しい入力を巻き戻さない）。
       const facts = {
@@ -270,10 +293,35 @@ export async function updatePlace(uid: string, id: string, changes: { name: stri
         ...(changes.address && changes.address !== place.address ? { address: changes.address } : {}),
         ...(genre && genre !== place.genre ? { genre } : {}),
       };
-      if (Object.keys(facts).length) tx.set(urlFacts(place.url), { ...facts, updatedAt: now }, { merge: true });
+      // 撤回可能な範囲を本人の記録に閉じる。派生した手修正も共通情報へ転載しない。
+      if (!importedNow && !doc.get("foursquareImported") && Object.keys(facts).length) tx.set(urlFacts(place.url), { ...facts, updatedAt: now }, { merge: true });
     }
     tx.update(ref, patch);
-    return publicRecord(id, { ...place, ...patch });
+    return publicRecord(id, { ...doc.data(), ...patch });
+  });
+}
+
+// 機能の停止後も撤回できる。後から本人が変えた項目・メモ・訪問履歴には触れない。
+export async function removeFoursquare(uid: string, id: string, expectedUpdatedAt?: number) {
+  if (!/^[a-f0-9]{64}$/.test(id)) throw new ApiError(404, "保存したお店が見つかりません。");
+  return database().runTransaction(async tx => {
+    const ref = records(uid).doc(id), doc = await tx.get(ref);
+    if (!doc.exists) throw new ApiError(404, "保存したお店が見つかりません。");
+    const data = doc.data()!, source = data.foursquareSource as FsqProvenance | undefined;
+    if (expectedUpdatedAt !== undefined && data.updatedAt !== expectedUpdatedAt) throw new ApiError(409, "別の画面で更新されました。開き直してください。");
+    if (!source) return publicRecord(id, data);
+    const edited = new Set<string>(data.editedFields ?? []);
+    const patch: Record<string, unknown> = { foursquareSource: null, updatedAt: Math.max(Date.now(), data.updatedAt + 1) };
+    for (const field of ["name", "address", "genre"] as const) {
+      const value = source.fields[field];
+      if (value && data[field] === value.applied) {
+        patch[field] = value.before;
+        if (!value.editedBefore) edited.delete(field);
+      }
+    }
+    patch.editedFields = [...edited];
+    tx.update(ref, patch);
+    return publicRecord(id, { ...data, ...patch });
   });
 }
 

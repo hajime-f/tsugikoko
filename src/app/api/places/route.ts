@@ -2,6 +2,8 @@ import { authenticatedUid, errorResponse, jsonResponse, smallJson } from "@/serv
 import { createPlaceSchema, placeListQuerySchema } from "@/lib/places/schema";
 import { createPlace, limitWrites, listPlaces } from "@/server/places/service";
 import { dispatchExtraction } from "@/server/places/dispatch";
+import { foursquareEnabled } from "@/server/places/foursquare";
+import { googleMapsUrl } from "@/lib/places/google-maps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +29,6 @@ export async function POST(request: Request) {
     await limitWrites(uid);
     const result = await createPlace(uid, url);
     if (result.place.extraction === "pending") await dispatchExtraction(uid, result.place.id).catch(() => console.error("place_dispatch_failed"));
-    return jsonResponse(result, result.duplicate ? 200 : 201);
+    return jsonResponse({ ...result, completeDetails: foursquareEnabled() && Boolean(googleMapsUrl(url)) && !result.duplicate }, result.duplicate ? 200 : 201);
   } catch (error) { return errorResponse(error); }
 }

@@ -6,10 +6,11 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { SITE_URL } from "@/lib/site";
 
 // 共有に使う項目だけを受け取り、メモ・評価・本人の識別情報は渡さない。
-export function SharePlaceButton({ name, url, disabled = false, className }: {
-  name: string; url: string; disabled?: boolean; className?: string;
+export function SharePlaceButton({ name, url, disabled = false, className, foursquare = false }: {
+  name: string; url: string; disabled?: boolean; className?: string; foursquare?: boolean;
 }) {
-  return <ShareButton text={name.trim() || "気になるお店"} url={url} disabled={disabled} className={className}
+  const text = (name.trim() || "気になるお店") + (foursquare ? `\n情報提供: Foursquare OS Places\n${SITE_URL}/licenses/foursquare-NOTICE.txt` : "");
+  return <ShareButton text={text} url={url} disabled={disabled} className={className}
     label="共有" title="お店をSNSで共有"
     description="店名と店舗URLを共有します。メモ・訪問記録・評価は含みません。投稿は各SNSの画面で確認してください。" />;
 }

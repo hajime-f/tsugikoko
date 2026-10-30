@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPage() {
-  return <PrivacyDocument title="プライバシーポリシー" updatedAt="2026年10月29日">
+  return <PrivacyDocument title="プライバシーポリシー" updatedAt="2026年10月31日">
     <p>{SITE_OPERATOR}（以下「運営者」）は、ツギココの提供にあたり、次のとおり利用者の情報を取り扱います。</p>
     <section><h2>取得する情報と利用目的</h2>
       <ul>
@@ -28,7 +28,7 @@ export default function PrivacyPage() {
     </section>
     <section><h2>記録の公開範囲とおすすめ</h2>
       <p>個人の保存リスト、メモ、訪問記録、評価明細をほかの利用者に表示しません。おすすめには利用者間の保存・評価の傾向を利用しますが、誰が保存・評価したかを表示しません。おすすめの内部データでは、アカウント識別子を変換したキーと保存・評価の傾向を扱います。</p>
-      <p>店名・住所・ジャンルは、同じURLを保存する利用者の入力補助にも利用します。これらの共通情報に入力者の名前やメールアドレスは含めません。SNSへの共有では、利用者が選んだ店名とURLなどを共有先に渡します。個人メモ・評価・訪問記録は共有文に含めません。</p>
+      <p>店名・住所・ジャンルは、同じURLを保存する利用者の入力補助にも利用します。ただし、Foursquareの入力補助を利用した記録は、この共通情報への転記対象から除きます。これらの共通情報に入力者の名前やメールアドレスは含めません。SNSへの共有では、利用者が選んだ店名とURLなどを共有先に渡します。個人メモ・評価・訪問記録は共有文に含めません。</p>
     </section>
     <section><h2>外部サービスへの送信と委託</h2>
       <p>Googleマップのリンクを保存した場合、カードの表示時に、店舗を特定するためリンクに含まれる店名・座標や店舗の識別子をGoogle Maps Platformへ送信し、店名・住所を取得することがあります。短縮リンクはGoogleへ接続して転送先を確認します。個人メモ、訪問記録、ログイン情報は送りません。Googleから取得した店名・住所は表示中だけ扱い、ツギココのデータベース、店名検索、おすすめ、SNSの共有文には使用しません。再取得用の店舗識別子（Place ID）と取得回数・時刻は保存します。Google由来の情報の取り扱いには、下記のGoogleのプライバシーポリシーも適用されます。</p>
@@ -37,6 +37,11 @@ export default function PrivacyPage() {
       <p>店舗情報の自動入力では、対応する公開サイトにサーバーからアクセスします。個人メモやログイン情報は送りません。「現在地から探す」を選んだ場合は、ブラウザーの許可を得て取得した位置を約100m単位に丸め、地域を調べるため国土地理院へ送ります。ツギココに保存するのは選択した地域コードで、精密な座標や移動履歴は保存しません。</p>
       <p>本人の同意、サービス提供に必要な委託、法令に基づく場合などを除き、個人データを第三者に提供しません。</p>
       <p><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Googleのプライバシーポリシー</a> / <a href="https://www.facebook.com/privacy/policy/" target="_blank" rel="noopener noreferrer">Metaのプライバシーポリシー</a> / <a href="https://x.com/ja/privacy" target="_blank" rel="noopener noreferrer">Xのプライバシーポリシー</a></p>
+    </section>
+    <section><h2>Foursquareによる店舗情報の入力補助</h2>
+      <p>対応するGoogleマップのリンクに含まれる店舗名・店舗ピンの座標を照合に使い、サーバー内に用意したFoursquare OS Placesのデータから候補を探します。短縮リンクの転送先の確認はGoogleへの通信を伴います。Foursquareへ利用者のURLや個人情報を送信することはありません。</p>
+      <p>確認して保存した店名・住所・ジャンルは、Foursquare由来の情報として、本人のマイリストの表示・検索・共有に使用します。元の値・出典・取り込んだ時刻も保存し、「編集」から取り込みを取り消せます。取り込み後に本人が変更した項目は取り消しでも保持します。Google Maps Platformから取得した表示用の店名・住所を、この入力補助へコピーすることはありません。</p>
+      <p>収録地域や更新状況によって候補がない場合や、店舗の営業状況・表記が実際と異なる場合があります。情報提供元と利用条件は<a href="/licenses/foursquare-NOTICE.txt">Foursquare OS PlacesのNOTICE</a>および<a href="/licenses/Apache-2.0.txt">Apache License 2.0</a>をご覧ください。</p>
     </section>
     <section><h2>アクセス解析・広告・ブラウザー内の保存</h2>
       <p>ログイン状態、保存前のURL、アクセス解析の停止設定などを、ブラウザーの保存領域に保持します。端末を共有する場合は、利用後にログアウトしてください。</p>

@@ -6,6 +6,10 @@ runConfig:
   cpu: 1
   memoryMiB: 512
 env:
+  # 自動広告は未ログインの公開トップのみ。無効化には再ビルドが必要。
+  - variable: NEXT_PUBLIC_ADSENSE_ENABLED
+    value: "true"
+    availability: [BUILD, RUNTIME]
   # 恵比寿周辺のFoursquare OS Places。サーバー専用データを公開ビルドに同梱する。
   - variable: FOURSQUARE_ENABLED
     value: "true"

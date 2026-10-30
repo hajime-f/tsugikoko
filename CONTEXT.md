@@ -610,3 +610,21 @@ tsugikoko/
 - 最終確認: Claude再レビュー266151eb-5102-4c52-8286-98c7170ecb12で指摘解消・承認。FSQ統合8件、E2E10件成功、最終typecheckとdiff --check成功。E2Eは一度スマホの再読み込み後のログイン復元が5秒を超えたため、認証後のURL欄を15秒まで待ってから保存カードを検証する形に修正して全10件を再実行した。結果は.agent-bridge/runtime/fsq-auto-final-e2e.log。アプリの追加変更はなし。修正はレビュー・検証済み、未コミット・未push・未デプロイ。本番は9d1811bのまま。
 
 - 藤田さん本人から、この自動保存修正についてもcommit・push・deployの指示を受領。レビュー済み10ファイルを公開する。未追跡のスクリーンショット、public/images/logo/、RESUME.mdは引き続き除外する。
+
+- Foursquare自動保存の公開完了: 2ac03d2をmainへcommit/push、Cloud Build 374464f2-7776-4e30-9175-181e90c032f6成功、tsugikoko-build-2026-10-30-002へ100%切替。本番の公開画面・バンドル・API認証・ライセンス・解析停止等の確認成功。本人の認証を用いた本番記録への書き込み検証は行っていない。記録は.agent-bridge/runtime/fsq-auto-release-result.json。
+
+## AdSense配信準備（2026年10月31日）
+
+- Claudeの依頼19296618-49b7-4ca1-a518-034c52383a56の内容を、藤田さん本人の「進めてください。」で実装。今回のコミット・push・デプロイは未承認。
+- ads.txt、公開トップ専用AdSenseローダー、NEXT_PUBLIC_ADSENSE_ENABLED、停止設定への連動、プライバシー記載を追加。認証画面・ログアウト・トップへの復帰は必要に応じ完全遷移し、外部JSを操作画面へ持ち越さない。URL下書きはsessionStorageで保持する。
+- AdSenseの停止にも既存ANALYTICS_PREFERENCEを使用する。GA4・登録完了イベント以外の既存AWタグの挙動は変更しない。サイト承認・自動広告・必要地域のCMPは管理画面側の設定事項。設定は操作していない。
+- テストとClaudeレビューを進める。公開せず、藤田さんの指示を待つ。スクリーンショット、ロゴ、RESUME.mdは引き続き除外する。
+
+- 方針変更1d94912dが会話へ未配信だったため、Claude初回レビュー21f51911で判明。藤田さん本人に確認し「マイリストにも広告枠を追加する」と回答を受領。公開トップに加え、homeの保存カード内にインフィード1枠を追加する。NEXT_PUBLIC_ADSENSE_SLOT_MYLIST未設定では枠も読込も無効。管理画面の/home自動広告除外とユニット作成は未実施で、IDも未受領。
+- モーダル全体の検出/同期、枠の非表示、1マウント1要求、保存0件/ごみ箱除外、停止時は設定の永続化を確認して現在ページ再読込（保存不能時だけprivacy）へ修正。個人記録を広告引数に渡さない。テスト/再レビュー中。コミット・公開は引き続き指示待ち。
+
+- Claude再レビューf7f0d1b3で配信済み広告のCSS非表示を修正するよう指摘。公式案内には広告をコンテンツで覆うことも避けるとあるため、モーダルを開いたら枠ごと取り除き、同じ一覧タブでは再要求しない形に変更。CSSのhidden/visibility指定は削除。ごみ箱/0件も枠なし。停止設定の初期復元前に操作できないようcheckboxをdisabledにした。
+- 最終検証完了: AdSenseのスロットあり16件・なし14件、既存解析/成果38件、認証24件、単体29件、typecheck、広告有効+実FSQカタログの本番ビルド、diff --check成功。スロットありでは未設定専用2件、なしでは設定あり専用4件を意図的skip。連続実行の最後のauthは管理API一覧に対象ユーザーがなく6件失敗したが、新規エミュレーターでアプリ無変更の全24件が成功。広告の停止後に消えるcheckboxをcheck()が待ち続けたE2Eはclickと停止後状態の検証に修正した。初回のブラウザー終了も再実行で成功。
+- ハッシュ付きURLでも確実に文書を破棄するため、現在ページのreplaceをlocation.reloadへ変更。ハッシュ付きトップの別タブ停止を含む最終スロットあり16件も成功。Claudeレビューa7ccd62b、追加修正a933f8e0で承認。スマホ/PCの枠を目視確認（.agent-bridge/runtime/adsense-mylist-mobile.png / desktop.png）。実広告は取得せず模擬スクリプトを使用。
+- 結果ログ: .agent-bridge/runtime/adsense-approved-e2e.log（16+14+38成功、末尾authの失敗も記録）、adsense-auth-isolated.log（24成功）、adsense-final-confirm.log（最終16成功）、adsense-production-build.log。未コミット・未push・未デプロイ。本番はFoursquare修正2ac03d2のまま。マイリスト広告を有効化するにはインフィードのユニットIDと必要に応じlayout-key、AdSense管理画面で/home自動広告除外・既存枠最適化offを確認する。今回は管理画面を変更していない。
+- 藤田さん本人からAdSense変更のcommit・push・deploy指示を受領。レビュー済み変更を公開する。マイリストのユニットIDは未設定のままなので、今回の公開ではマイリスト枠は無効。スクリーンショット、public/images/logo/、RESUME.md、ブリッジの作業ファイルはコミット・配布に含めない。コミット済みファイルだけの作業ディレクトリからデプロイし、本番のads.txt・トップの読込・停止・対象外画面を確認する。

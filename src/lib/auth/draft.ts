@@ -13,7 +13,13 @@ export function setPendingDraft(value: string) {
     const url = validPlaceUrl(value);
     if (url) sessionStorage.setItem(pendingKey, url);
     else sessionStorage.removeItem(pendingKey);
-  } catch { /* Storageが使えなくても認証は継続する。 */ }
+    return true;
+  } catch { return false; }
+}
+
+export function readPendingDraft() {
+  try { return validPlaceUrl(sessionStorage.getItem(pendingKey) ?? "") ?? ""; }
+  catch { return ""; }
 }
 
 export function claimPendingDraft(uid: string) {

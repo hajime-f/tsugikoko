@@ -1,6 +1,7 @@
 "use client";
 
 import { AnalyticsPrivacy } from "@/components/analytics/analytics-privacy";
+import { AdSense, adsenseWasLoaded } from "@/components/analytics/adsense";
 import { ShareSiteSection } from "@/components/places/share-place-button";
 
 import { HeroImage } from "@/components/ui/hero-image";
@@ -25,7 +26,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AuthPanel } from "@/components/auth/auth-panel";
-import { validPlaceUrl } from "@/lib/auth/draft";
+import { setPendingDraft, validPlaceUrl } from "@/lib/auth/draft";
 import { trackCtaClick, type AnalyticsCta } from "@/lib/analytics";
 
 type Modal = "login" | "signup" | "privacy" | "credits" | null;
@@ -94,7 +95,12 @@ function Brand({ light = false }: { light?: boolean }) {
 export function LandingPage() {
   const auth = useAuth();
   const router = useRouter();
-  useEffect(() => { if (!auth.loading && auth.user) router.replace("/home"); }, [auth.loading, auth.user, router]);
+  useEffect(() => {
+    if (!auth.loading && auth.user) {
+      if (adsenseWasLoaded()) window.location.replace("/home");
+      else router.replace("/home");
+    }
+  }, [auth.loading, auth.user, router]);
   const [modal, setModal] = useState<Modal>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [url, setUrl] = useState("");
@@ -104,6 +110,11 @@ export function LandingPage() {
 
   function openAuth(mode: "login" | "signup", buttonId: AnalyticsCta) {
     trackCtaClick(buttonId);
+    if (adsenseWasLoaded()) {
+      setPendingDraft("");
+      window.location.assign(`/login?mode=${mode}`);
+      return;
+    }
     auth.clearError();
     setDraftUrl("");
     setMenuOpen(false);
@@ -121,6 +132,14 @@ export function LandingPage() {
     try {
       const parsed = validPlaceUrl(value);
       if (!parsed) throw new Error();
+      if (adsenseWasLoaded()) {
+        if (!setPendingDraft(parsed)) {
+          setError("URLを次の画面へ引き継げませんでした。ブラウザーの保存設定を確認して、もう一度お試しください。");
+          return;
+        }
+        window.location.assign("/login?mode=signup");
+        return;
+      }
       setError("");
       setDraftUrl(parsed);
       setModal("signup");
@@ -131,6 +150,7 @@ export function LandingPage() {
 
   return (
     <>
+      <AdSense eligible={!auth.loading && !auth.user && modal === null} />
       <a className="skip-link" href="#main">本文へ移動</a>
       <header className="site-header">
         <div className="header-inner">
@@ -266,7 +286,7 @@ export function LandingPage() {
       </main>
 
       <footer className="site-footer">
-        <div className="section footer-inner"><div><a href="#" aria-label="ツギココ ホーム"><Brand /></a><p className="footer-tagline">気になったら、ツギココ</p></div><nav aria-label="フッターナビゲーション"><a href="#how-it-works">使い方</a><a href="#faq-title">よくある質問</a><button onClick={() => setModal("privacy")}>プライバシーについて</button><a href="/terms">利用規約</a><a href="/privacy">プライバシーポリシー</a><a href="/data-deletion">データの削除</a><button onClick={() => setModal("credits")}>写真のクレジット</button></nav></div>
+        <div className="section footer-inner"><div><a href="#" aria-label="ツギココ ホーム"><Brand /></a><p className="footer-tagline">気になったら、ツギココ</p></div><nav aria-label="フッターナビゲーション"><a href="#how-it-works">使い方</a><a href="#faq-title">よくある質問</a><button onClick={() => { if (adsenseWasLoaded()) window.location.assign("/privacy"); else setModal("privacy"); }}>プライバシーについて</button><a href="/terms">利用規約</a><a href="/privacy">プライバシーポリシー</a><a href="/data-deletion">データの削除</a><button onClick={() => setModal("credits")}>写真のクレジット</button></nav></div>
         <div className="section footer-bottom"><span>© {new Date().getFullYear()} ツギココ</span><span className="preview-label"><span />プレビュー版</span></div>
       </footer>
 

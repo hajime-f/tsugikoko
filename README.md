@@ -487,3 +487,25 @@ node --conditions=react-server --import tsx scripts/withdraw-foursquare.mts --ap
 保存時の候補再確認は、PATCH全体の更新制限を使い、候補表示の分10回枠を二重消費しない。再確認の障害・停止時には「候補の入力を取り消して手入力に戻る」で、自動入力したままの値だけを取り消し、本人が入力した項目とメモを保持して保存し直せる。何も取り込んでいなければ `foursquareImported` は付けない。一度取り込んだ記録は、撤回後も共通情報への転記対象には戻さない。
 
 検証: `E2E_AUTH_EMULATOR=1 E2E_FOURSQUARE=1 npx playwright test --workers=1` を認証・Firestoreエミュレーター内で実行すると、架空の地域カタログを用いてスマホ/PCの入力・保存・撤回・遅延応答・失敗時の手入力を確認する。実店舗データやFoursquareのトークンはテストで使わない。
+
+## Google AdSense の広告配信（2026年10月31日）
+
+`public/ads.txt` に `google.com, pub-9669747563254817, DIRECT, f08c47fec0942fa0` を配置する。所有権確認用の `google-adsense-account` メタタグは維持する。`NEXT_PUBLIC_ADSENSE_ENABLED=true` のビルドで有効になる。apphosting.yamlではBUILD/RUNTIME両方に設定する。未設定・falseなら無効で、変更には再ビルドが必要。AdSenseのpub IDと既存Google広告のAW IDは用途が異なる。
+
+未ログインの公開トップでは、認証復元後に自動広告スクリプトをasync/crossOrigin=anonymousで読み込む。ログイン後の `/home` では、保存カードの2件目の後（1件の場合はその末尾）に、独立した行のインフィード枠を1つ置く。「広告」と明記し、カードやボタンから間隔を取る。枠に店名・ジャンル・保存URL・UIDなどを渡さず、広告の内容を店舗情報から指定しない。ログイン後のコンテンツに関連した広告が出るとは保証しない。
+
+マイリスト枠の有効化前に行うこと:
+
+1. AdSenseでインフィード広告ユニットを作り、スニペットの `data-ad-slot` を `NEXT_PUBLIC_ADSENSE_SLOT_MYLIST`（数字のみ）としてBUILD/RUNTIMEへ設定する。スニペットに `data-ad-layout-key` がある場合は `NEXT_PUBLIC_ADSENSE_LAYOUT_KEY_MYLIST` にも設定する。勝手なIDは入れない。現在はどちらも未設定で、本番用の枠はまだ無効。
+2. 自動広告の[ページ除外](https://support.google.com/adsense/answer/9262311?hl=en)に `https://tsugikoko.com/home` を設定し、既存広告枠の自動最適化も無効にして、設定の反映を確認する。読み込みスクリプトは自動広告と共通なので、この管理画面設定なしでは手動枠以外に自動広告が挿入される可能性がある。コードで除外済みとは扱わない。
+3. サイト承認、[自動広告の有効化](https://support.google.com/adsense/answer/9261307?hl=en-GB)、必要地域の同意メッセージを確認してから公開する。EEA・英国・スイス向けのパーソナライズド広告には[Google認定CMPの要件](https://support.google.com/adsense/answer/13554116?hl=en-GB)があり、アプリの停止設定はCMPの代替ではない。今回、これらの管理画面設定は操作していない。
+
+スロット未設定・不正、保存0件ではマイリストの枠を出さず、新しくスクリプトも読まない。ごみ箱では枠を外す。編集・削除・訪問履歴・リスト管理・アカウント・退会・共有などのモーダルを開くと枠を取り除く。表示済み広告をCSSで隠したり、モーダルで覆って保持したりしない。操作を閉じるだけでは同じ一覧タブに再表示せず、タブ切替やページ再読込で再開する。スクリプトはドキュメントにつき1回、手動枠はマウントにつき1回だけpushする。モーダル開閉や定期的な一覧更新では広告を更新し直さない。広告エラーでも店舗保存・編集・認証を継続する。[インフィード広告の公式実装案内](https://support.google.com/adsense/answer/9189560?hl=en)に沿い、fluid形式・可変高さ・幅250px以上で初期化する。
+
+実行済みの外部JSはscript要素を消すだけでは停止できない。広告を読み込んだトップから認証へ進むときは完全遷移し、入力URLはsessionStorageで引き継ぐ。保存に失敗したときは入力を残す。広告有効時はログイン画面からトップへの移動とログアウトも完全遷移し、ブラウザー履歴に操作画面と広告を同じドキュメントで残さない。広告無効時は既存のSPA遷移を維持する。対象外の経路へSPA遷移した場合も、ルートのAdSenseLifecycleで広告の実行環境を破棄する。
+
+既存の「このブラウザーでアクセス解析を停止する」をAdSenseにも適用する。利用者が選んだ停止を広告にも反映する方針とした。停止中や設定を読めないときは読み込まない。別タブの変更や履歴復帰時も確認し、読み込み済みなら現在のページを完全に読み直して停止する。停止設定を保存できない場合は、再開ループを避けて広告のない `/privacy` へ移動する。GA4と新規登録コンバージョンも従来どおり停止するが、既存のGoogle広告タグ（AW-18532065959）の初期config自体を停止する変更ではない。
+
+現在のアプリにはCSPヘッダーがないため、新しいCSPや許可ドメイン一覧は追加していない。将来は[AdSense公式のCSP案内](https://support.google.com/adsense/answer/16283098?hl=en)に従ってnonce方式を検討する。プライバシーポリシーと共通AnalyticsPrivacyに第三者配信・Cookie・Google広告設定/AboutAdsでのパーソナライズ停止・送信内容を追記した。改定日は2026年10月31日。[必須のプライバシー記載](https://support.google.com/adsense/answer/1348695?hl=ja)、[ads.txtの案内](https://support.google.com/adsense/answer/12171612?hl=en)を参照。今回のコードだけで審査通過・広告表示・収益を保証しない。
+
+検証は `E2E_ADSENSE=1 npm run test:auth`（スロットなし）と `E2E_ADSENSE=1 E2E_ADSENSE_SLOT=1 npm run test:auth`（テスト用スロットあり）。エミュレーターと模擬広告スクリプトで、スマホ/PCの読み込み回数・空一覧/モーダル/退会での枠の不在・店舗操作・停止・履歴遷移・URL下書き・ads.txtの200/text/plainを確認する。実際の広告は取得しない。

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { AdSenseLifecycle } from "./adsense";
 import { ANALYTICS_PREFERENCE_EVENT, ANALYTICS_PREFERENCE_KEY, trackPageView, trackScrollDepth } from "@/lib/analytics";
 
 export function Analytics() {
@@ -36,5 +37,5 @@ export function Analytics() {
     window.addEventListener("scroll", scroll, { passive: true });
     return () => { window.removeEventListener("scroll", scroll); cancelAnimationFrame(frame); };
   }, [pathname]);
-  return null;
+  return <AdSenseLifecycle />;
 }

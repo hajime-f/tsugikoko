@@ -2,6 +2,7 @@
 
 import { AccountDeletionPanel } from "@/components/auth/account-deletion-panel";
 import { AnalyticsPrivacy } from "@/components/analytics/analytics-privacy";
+import { adsenseConfigured } from "@/components/analytics/adsense";
 
 import { HeroImage } from "@/components/ui/hero-image";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -55,7 +56,10 @@ export function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!auth.loading && !auth.user) router.replace(logoutDestination.current ?? "/login");
+    if (!auth.loading && !auth.user) {
+      if (adsenseConfigured && logoutDestination.current === "/") window.location.replace("/");
+      else router.replace(logoutDestination.current ?? "/login");
+    }
   }, [auth.loading, auth.user, router]);
   const uid = auth.user?.uid;
   useEffect(() => { setPendingDraft(uid ? { uid, url: readDraft(uid) } : null); }, [uid]);
@@ -89,7 +93,7 @@ export function HomePage() {
       </section>
 
       <RecommendationsSection key={`recommendations-${user.uid}`} revision={recommendationsRevision} onSaved={onRecommendationSaved} onSettings={() => setModal("recommendations")} />
-      <PlacesSection key={user.uid} draft={draft} onSaved={onSaved} revision={placesRevision} onChanged={onPlacesChanged} />
+      <PlacesSection key={user.uid} draft={draft} onSaved={onSaved} revision={placesRevision} onChanged={onPlacesChanged} adsPaused={modal !== null} />
       <ShareSiteSection />
       <footer className="member-footer"><span>気になったら、ツギココ。</span><button onClick={openAccount}>アカウント設定<ArrowRight size={14} /></button></footer>
     </main>
@@ -115,7 +119,7 @@ export function HomePage() {
           <h3 className="account-heading">プライバシー</h3><button className="text-button" onClick={() => setModal("privacy")}>利用状況の集計・アクセス解析<ChevronRight size={16} /></button>
           <p className="auth-footnote"><a href="/terms">利用規約</a>・<a href="/privacy">プライバシーポリシー</a>・<a href="/data-deletion">データの削除を依頼する</a></p>
           <button className="text-button account-delete-link" disabled={auth.busy} onClick={() => { auth.clearError(); setModal("delete"); }}>退会・データ削除<ChevronRight size={16} /></button>
-          <button className="logout-button" disabled={auth.busy} onClick={async () => { logoutDestination.current = "/"; if (await auth.logout()) router.replace("/"); else logoutDestination.current = null; }}>{auth.busy ? <LoaderCircle size={18} className="spinning" /> : <LogOut size={18} />}ログアウト</button>
+          <button className="logout-button" disabled={auth.busy} onClick={async () => { logoutDestination.current = "/"; if (await auth.logout()) { if (adsenseConfigured) window.location.replace("/"); else router.replace("/"); } else logoutDestination.current = null; }}>{auth.busy ? <LoaderCircle size={18} className="spinning" /> : <LogOut size={18} />}ログアウト</button>
         </> : modal === "delete" ? <>
           <DialogTitle className="dialog-title">退会・データ削除</DialogTitle>
           <DialogDescription className="dialog-description">本人確認と最終確認の後に、退会を受け付けます。</DialogDescription>

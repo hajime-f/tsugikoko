@@ -5,7 +5,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { database } from "../../src/server/firebase/admin";
-import { createPlace, updatePlace, removeFoursquare, listPlaces } from "../../src/server/places/service";
+import { autofillFoursquare, createPlace, updatePlace, removeFoursquare, listPlaces } from "../../src/server/places/service";
 import { loadFsqCatalog, lookupSavedFsq, selectedFsq, lookupFsqUrl } from "../../src/server/places/foursquare";
 import { backfillUrlFacts } from "../../src/server/places/backfill";
 import { POST, DELETE } from "../../src/app/api/places/[id]/foursquare/route";
@@ -85,4 +85,54 @@ test("候補から何も取り込まなかった手入力は出典フラグを�
   const saved = await updatePlace(uid, place.id, { name: "本人入力", address: "本人が入力した住所", genre: "cafe", note: "", expectedUpdatedAt: place.updatedAt }, origin);
   assert.equal(saved.foursquareImported, undefined); assert.equal(saved.foursquare, undefined);
   assert.equal((await database().doc(`urlFacts/${createHash("sha256").update(place.url).digest("hex")}`).get()).get("name"), "本人入力");
+});
+
+test("新規・既存の空欄へ自動保存し、再取得・撤回後は二重取り込みしない", async () => {
+  const { uid, place } = await setup();
+  const result = await autofillFoursquare(uid, place.id);
+  assert.equal(result.status, "saved");
+  assert.equal(result.place.name, origin.row.name); assert.equal(result.place.address, origin.row.address);
+  assert.equal(result.place.genre, "sushi"); assert.equal(result.place.foursquare?.id, origin.row.id);
+  const ref = database().doc(`users/${uid}/savedPlaces/${place.id}`);
+  assert.equal((await ref.get()).get("name"), origin.row.name);
+  assert.equal((await listPlaces(uid, false, null, "all", { q: origin.row.name, genre: "sushi", sort: "newest" })).places.length, 1);
+  assert.equal((await autofillFoursquare(uid, place.id)).place.updatedAt, result.place.updatedAt);
+  assert.equal((await database().doc(`urlFacts/${createHash("sha256").update(place.url).digest("hex")}`).get()).exists, false);
+  await removeFoursquare(uid, place.id, result.place.updatedAt);
+  assert.equal((await autofillFoursquare(uid, place.id)).status, "unchanged");
+  assert.equal((await ref.get()).get("name"), "");
+});
+test("自動保存でも本人の入力・消した項目・メモを守り、取得中の編集と競合する", async () => {
+  const { uid, place } = await setup();
+  const ref = database().doc(`users/${uid}/savedPlaces/${place.id}`);
+  await updatePlace(uid, place.id, { name: "本人の名前", address: "消す前の住所", genre: "cafe", note: "本人メモ" });
+  const manual = await updatePlace(uid, place.id, { name: "本人の名前", address: "", genre: null, note: "本人メモ" });
+  assert.equal((await autofillFoursquare(uid, place.id)).status, "unchanged");
+  assert.equal((await ref.get()).get("address"), ""); assert.equal((await ref.get()).get("genre"), null);
+  await assert.rejects(updatePlace(uid, place.id, { action: "autofill", expectedUpdatedAt: place.updatedAt }, origin), { status: 409 });
+  assert.equal((await updatePlace(uid, place.id, { action: "autofill", expectedUpdatedAt: manual.updatedAt }, origin)).note, "本人メモ");
+  const partial = await setup();
+  await updatePlace(partial.uid, partial.place.id, { name: "入力した店名", address: "", note: "保持するメモ" });
+  const filled = await autofillFoursquare(partial.uid, partial.place.id);
+  assert.equal(filled.place.name, "入力した店名"); assert.equal(filled.place.address, origin.row.address); assert.equal(filled.place.note, "保持するメモ");
+});
+test("自動保存は停止中・対象外・他人・ごみ箱に適用しない", async () => {
+  const { uid, place } = await setup();
+  process.env.FOURSQUARE_ENABLED = "false";
+  try { assert.equal((await autofillFoursquare(uid, place.id)).status, "disabled"); }
+  finally { process.env.FOURSQUARE_ENABLED = "true"; }
+  await assert.rejects(autofillFoursquare("other", place.id), { status: 404 });
+  const unknown = await createPlace(uid, "https://maps.google.com/?cid=1234567890");
+  assert.equal((await autofillFoursquare(uid, unknown.place.id)).status, "not_found");
+  const limit = database().doc(`users/${uid}/limits/foursquare`);
+  const count = (await limit.get()).get("count");
+  assert.equal((await autofillFoursquare(uid, unknown.place.id)).status, "not_found");
+  assert.equal((await limit.get()).get("count"), count);
+  assert.equal((await database().doc(`users/${uid}/savedPlaces/${unknown.place.id}`).get()).get("foursquareCheckedVersion"), catalog.version);
+  await database().doc(`users/${uid}/savedPlaces/${unknown.place.id}`).update({ foursquareCheckedVersion: "0".repeat(64) });
+  await autofillFoursquare(uid, unknown.place.id);
+  assert.equal((await limit.get()).get("count"), count + 1);
+  assert.equal((await database().doc(`users/${uid}/savedPlaces/${unknown.place.id}`).get()).get("name"), "");
+  await updatePlace(uid, place.id, { action: "trash" });
+  await assert.rejects(autofillFoursquare(uid, place.id), { status: 404 });
 });

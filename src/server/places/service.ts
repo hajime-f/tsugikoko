@@ -11,6 +11,8 @@ import { genreFromText, normalizeGenre, type Genre } from "@/lib/places/genres";
 import { activeListIds, collectionsOf, collectionsRef, getCollections } from "./collections";
 import type { PlaceCollection } from "@/lib/places/schema";
 import type { FsqProvenance, FsqRow } from "@/lib/places/foursquare";
+import { foursquareEnabled, loadFsqCatalog, lookupSavedFsq } from "./foursquare";
+import { googleMapsUrl } from "@/lib/places/google-maps";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const records = (uid: string) => database().collection("users").doc(uid).collection("savedPlaces");
@@ -241,15 +243,64 @@ export async function updateVisit(uid: string, id: string, input: VisitAction) {
   });
 }
 
-export async function updatePlace(uid: string, id: string, changes: { name: string; address: string; note: string; genre?: Genre | null; expectedUpdatedAt?: number } | { action: "retry" | "trash" | "restore" }, origin?: { row: FsqRow; version: string }) {
+// 一覧表示から順次呼ぶ。Googleの表示用の値ではなく、サーバーで照合したFSQ候補だけを保存する。
+export async function autofillFoursquare(uid: string, id: string) {
+  if (!/^[a-f0-9]{64}$/.test(id)) throw new ApiError(404, "保存したお店が見つかりません。");
+  const doc = await records(uid).doc(id).get();
+  if (!doc.exists || doc.get("deleted")) throw new ApiError(404, "保存したお店が見つかりません。");
+  const place = publicRecord(id, doc.data()!);
+  if (!foursquareEnabled()) return { place, status: "disabled" as const };
+  const edited = editedFieldsOf(doc);
+  if (!googleMapsUrl(place.url) || place.foursquareImported ||
+      !(["name", "address", "genre"] as const).some(field => !place[field] && !edited.includes(field))) {
+    return { place, status: "unchanged" as const };
+  }
+  const catalog = await loadFsqCatalog();
+  if (doc.get("foursquareCheckedVersion") === catalog.version) {
+    return { place, status: doc.get("foursquareCheckStatus") === "needs_review" ? "needs_review" as const : "not_found" as const };
+  }
+  const checked = async (status: "not_found" | "needs_review") => {
+    await database().runTransaction(async tx => {
+      const current = await tx.get(doc.ref);
+      if (!current.exists || current.get("deleted") || current.get("updatedAt") !== place.updatedAt) throw new ApiError(409, "別の画面で更新されました。ページを読み直してください。");
+      // 照合結果の制御情報だけを保存。編集の版数やGoogle由来の情報は変更しない。
+      tx.update(doc.ref, { foursquareCheckedVersion: catalog.version, foursquareCheckStatus: status });
+    });
+    return { place, status };
+  };
+  let found;
+  try { found = await lookupSavedFsq(uid, id); }
+  catch (error) { if (error instanceof ApiError && error.status === 422) return checked("not_found"); throw error; }
+  if (!found.candidates.length) return checked("not_found");
+  if (!found.automatic || found.candidates.length !== 1) return checked("needs_review");
+  await limitWrites(uid);
+  const saved = await updatePlace(uid, id, { action: "autofill", expectedUpdatedAt: place.updatedAt }, { row: found.candidates[0], version: found.version });
+  if (saved.updatedAt === place.updatedAt) return checked("not_found");
+  return { place: saved, status: saved.updatedAt !== place.updatedAt ? "saved" as const : "unchanged" as const };
+}
+
+export async function updatePlace(uid: string, id: string, input: { name: string; address: string; note: string; genre?: Genre | null; expectedUpdatedAt?: number } | { action: "retry" | "trash" | "restore" } | { action: "autofill"; expectedUpdatedAt: number }, origin?: { row: FsqRow; version: string }) {
   if (!/^[a-f0-9]{64}$/.test(id)) throw new ApiError(404, "保存したお店が見つかりません。");
   return database().runTransaction(async (tx) => {
+    let changes = input;
     const ref = records(uid).doc(id), doc = await tx.get(ref);
     if (!doc.exists) throw new ApiError(404, "保存したお店が見つかりません。");
     const place = publicRecord(id, doc.data()!);
     if (expired(place)) throw new ApiError(404, "ごみ箱の保存期間が過ぎています。");
     const now = Math.max(Date.now(), place.updatedAt + 1);
     if (place.deleted && (!("action" in changes) || changes.action !== "restore")) throw new ApiError(409, "ごみ箱から戻してから編集してください。");
+    if ("action" in changes && changes.action === "autofill") {
+      if (!origin) throw new ApiError(400, "店舗候補を確認できませんでした。");
+      if (place.updatedAt !== changes.expectedUpdatedAt) throw new ApiError(409, "別の画面で更新されました。ページを読み直してください。");
+      if (place.foursquareImported) return place; // 撤回後や本人の修正後には再取り込みしない。
+      const edited = editedFieldsOf(doc);
+      const name = !place.name && !edited.includes("name") ? origin.row.name : place.name;
+      const address = !place.address && !edited.includes("address") ? origin.row.address : place.address;
+      const genre = !place.genre && !edited.includes("genre") ? origin.row.genre : place.genre;
+      if (name === place.name && address === place.address && genre === place.genre) return place;
+      changes = { name, address, note: place.note, expectedUpdatedAt: changes.expectedUpdatedAt,
+        ...(genre !== place.genre ? { genre } : {}) };
+    }
     let patch: Partial<SavedPlace> & { foursquareSource?: FsqProvenance | null; purgeAt?: Timestamp | null; attempts?: number; editedFields?: string[]; refresh?: boolean; queuedAt?: number | null } = { updatedAt: now };
     if ("action" in changes) {
       if (changes.action === "retry") {

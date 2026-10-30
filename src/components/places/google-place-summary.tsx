@@ -5,11 +5,11 @@ import { MapAddressLink } from "@/components/ui/map-address-link";
 import { googleMapsUrl, type GooglePlaceDetails } from "@/lib/places/google-maps";
 import type { SavedPlace } from "@/lib/places/schema";
 
-export function GooglePlaceSummary({ place, api }: { place: SavedPlace; api: <T>(path: string, init?: RequestInit) => Promise<T> }) {
+export function GooglePlaceSummary({ place, api, autofillPending = false, autofillMessage = "" }: { place: SavedPlace; api: <T>(path: string, init?: RequestInit) => Promise<T>; autofillPending?: boolean; autofillMessage?: string }) {
   const target = useRef<HTMLDivElement>(null);
   const [details, setDetails] = useState<GooglePlaceDetails | null>(null);
   const [error, setError] = useState("");
-  const eligible = !place.deleted && !place.googleLookupFailed && (!place.name || !place.address) && Boolean(googleMapsUrl(place.url));
+  const eligible = !autofillPending && !place.deleted && !place.googleLookupFailed && (!place.name || !place.address) && Boolean(googleMapsUrl(place.url));
   useEffect(() => {
     if (!eligible || !target.current) return;
     let active = true, started = false;
@@ -38,7 +38,8 @@ export function GooglePlaceSummary({ place, api }: { place: SavedPlace; api: <T>
       <a className="google-maps-attribution" href={visible.uri} target="_blank" rel="noopener noreferrer" translate="no">Google Maps</a>
       {visible.attributions.map((item, index) => <a className="google-provider-attribution" href={item.uri} key={index} target="_blank" rel="noopener noreferrer">{item.name}</a>)}
     </div>}
-    {eligible ? <p className="place-status-copy" role={error ? "status" : undefined}>{error || (visible ? "Googleマップの情報を表示しています。検索・共有に使う店名や住所は「編集」から入力できます。" : "Googleマップの店舗情報を確認しています。URLは保存済みです。")}</p>
+    {autofillPending ? <p className="place-status-copy" role="status">店名・住所・ジャンルを取得しています。</p>
+      : eligible ? <p className="place-status-copy" role={error || autofillMessage ? "status" : undefined}>{autofillMessage || error || (visible ? "Googleマップの情報を表示しています。検索・共有に使う店名や住所は「編集」から入力できます。" : "Googleマップの店舗情報を確認しています。URLは保存済みです。")}</p>
       : !place.name.trim() && !place.deleted && <p className="place-status-copy">{place.extraction === "pending" ? "URLは保存済みです。画面を閉じても取得処理は続きます。" : "URLは保存済みです。「編集」から店名・住所を入力できます。"}</p>}
   </div>;
 }

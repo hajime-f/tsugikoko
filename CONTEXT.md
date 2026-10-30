@@ -597,3 +597,16 @@ tsugikoko/
 - apphosting.yamlで有効化、next.config.tsで欠落/破損のビルド時検証とAPIのoutputFileTracingIncludesを追加する。公開設定の差分もClaudeレビュー後に進める。スクリーンショット、public/images/logo/、RESUME.md、接続トークンとブリッジの作業ファイルは引き続き除外する。
 
 - 公開設定レビュー336ab702-16d5-4fb6-8e11-2684b2893697で修正不要。カタログ有効の本番ビルドとstandaloneビルドが成功。3つのAPIトレースにカタログが含まれ、standalone/server.jsの作業ディレクトリに780行が元データと同一の内容で配置されることを確認。配布用サーバーを起動し、未認証POSTは401。欠落したカタログでは設定読み込みが失敗することも確認。公開後は別途本番の画面・API・配信を確認する。
+
+## 自動入力が保存項目に反映されない問題（2026年10月31日）
+
+- 前段の初版は9d1811bでcommit/push/deploy済み。Cloud Build 416a401b-0fec-44de-b963-1fe92cf1b0f7成功、tsugikoko-build-2026-10-30-001へ100%切替。本番の公開画面/ライセンス/API認証/解析停止確認は成功。記録は.agent-bridge/runtime/fsq-release-result.json。
+- 藤田さんの新しい画像（7.07.10）で、表示用Google情報だけが出て通常のname/address/genreが空のままと判明。前回は編集フォーム補完後の保存を必要としており、要望の自動保存を満たしていなかった。Codex側の実装不足として説明した。
+- 新規/既存の空欄カードに一覧からPOST foursquare?mode=autoを順次送信し、サーバーで検証したFSQ候補を通常項目へ保存するよう修正中。既存値・本人が消した項目・撤回済みは保護。updatedAtで競合拒否、従来のprovenance/隔離/撤回を維持する。
+- Claudeレビュー3d5482af-adf0-44c5-bf3c-797939650251の指摘に対応し、429でキュー停止・65秒後に未処理から再開。同じカタログ版数で照合済みのものはfoursquareCheckedVersion/foursquareCheckStatusで再照合を省略。0件はnot_found、要確認候補はneeds_review、503等は照合済みにしない。disabled応答で自動入力を停止。検索や店名順への影響は最新条件で再取得。再レビュー266151eb-5102-4c52-8286-98c7170ecb12を依頼。
+- 画像の正確な短縮URLを確認（読み取りのみ）。たかはし uCSrugQRseYpzUYK7 は候補1件、距離3m、東京都渋谷区恵比寿南1-1-3、ramen。すし好 1D4cRzUfggKqgxzG6 は候補1件、距離7m、東京都渋谷区恵比寿南1-4-12、sushi。どちらもFSQ側の店名には支店名なし。本番データへの書き込みはしていない。
+- 修正前半の検証: typecheck、単体29件、全統合50件、FSQ E2E8件、既存店舗E2E36件成功。レビュー修正後のFSQ統合8件成功、E2E10件は実行中。スマホ/PCの保存済みカードの画像を確認（.agent-bridge/runtime/foursquare-saved-mobile.png / desktop.png）。この修正のコミット・公開はまだ行っていない。
+
+- 最終確認: Claude再レビュー266151eb-5102-4c52-8286-98c7170ecb12で指摘解消・承認。FSQ統合8件、E2E10件成功、最終typecheckとdiff --check成功。E2Eは一度スマホの再読み込み後のログイン復元が5秒を超えたため、認証後のURL欄を15秒まで待ってから保存カードを検証する形に修正して全10件を再実行した。結果は.agent-bridge/runtime/fsq-auto-final-e2e.log。アプリの追加変更はなし。修正はレビュー・検証済み、未コミット・未push・未デプロイ。本番は9d1811bのまま。
+
+- 藤田さん本人から、この自動保存修正についてもcommit・push・deployの指示を受領。レビュー済み10ファイルを公開する。未追跡のスクリーンショット、public/images/logo/、RESUME.mdは引き続き除外する。

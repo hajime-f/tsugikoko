@@ -17,6 +17,8 @@ import type { FsqCandidate } from "@/lib/places/foursquare";
 import { genreGroups, genres, isGenre, type Genre } from "@/lib/places/genres";
 
 const cardMotifs = [Coffee, UtensilsCrossed, MapPin, Bookmark];
+const needsAutofill = (place: SavedPlace) => !place.deleted && !place.foursquareImported &&
+  (!place.name || !place.address || !place.genre) && Boolean(googleMapsUrl(place.url));
 function PlaceArtwork({ id, genre }: { id: string; genre: Genre | null }) {
   const item: { label: string; image: string | null } | null = isGenre(genre) ? genres[genre] : null;
   if (item?.image) {
@@ -62,6 +64,10 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
   const fieldsRef = useRef(fields); fieldsRef.current = fields;
   const fsqDraft = useRef<Partial<Record<"name" | "address" | "genre", { before: string | null; applied: string | null }>>>({});
   const [fsqDismissed, setFsqDismissed] = useState(false);
+  const attemptedAutofill = useRef(new Set<string>());
+  const [autofilling, setAutofilling] = useState<string | null>(null);
+  const [autofillPaused, setAutofillPaused] = useState<"cooldown" | "disabled" | null>(null);
+  const [autofillMessages, setAutofillMessages] = useState<Record<string, string>>({});
   const [modalError, setModalError] = useState("");
   const locked = useRef(false);
   const attemptedDraft = useRef("");
@@ -91,6 +97,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
     return data as T;
     } finally { for (const signal of signals) signal.removeEventListener("abort", abort); }
   }, [user]);
+
 
   const receiveCollections = useCallback((lists: PlaceCollection[]) => {
     collectionsRequestVersion.current++;
@@ -151,6 +158,38 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
     }
   }, [api, tab, query, genreFilter, sort, listFilter, loadCollections]);
 
+  const latestReload = useRef(reload); latestReload.current = reload;
+  const listNeedsRequery = useRef(searching); listNeedsRequery.current = searching;
+  useEffect(() => {
+    if (busy || modal || autofilling || loading || autofillPaused) return;
+    const place = places.find(item => needsAutofill(item) && !attemptedAutofill.current.has(item.id));
+    if (!place) return;
+    // 既存の空欄も対象にする。一覧の再描画では繰り返さず、短縮URLの解決は1件ずつ行う。
+    attemptedAutofill.current.add(place.id);
+    setAutofilling(place.id);
+    void api<{ place: SavedPlace; status: "saved" | "unchanged" | "needs_review" | "not_found" | "disabled" }>(`/${place.id}/foursquare?mode=auto`, { method: "POST" }).then(async result => {
+      if (!active.current) return;
+      if (result.status === "disabled") setAutofillPaused("disabled");
+      setPlaces(current => current.map(item => item.id === result.place.id && item.updatedAt <= result.place.updatedAt ? result.place : item));
+      setSavedPlace(current => current?.id === result.place.id && current.updatedAt <= result.place.updatedAt ? result.place : current);
+      setAutofillMessages(current => ({ ...current, [place.id]: result.status === "needs_review"
+        ? "自動入力するお店を特定できませんでした。「編集」から候補を確認できます。" : "" }));
+      if (result.status === "saved" && listNeedsRequery.current) await latestReload.current();
+    }).catch(cause => {
+      if (active.current && (cause as { status?: number })?.status === 429) {
+        attemptedAutofill.current.delete(place.id);
+        setAutofillPaused("cooldown");
+        return;
+      }
+      if (active.current) setAutofillMessages(current => ({ ...current, [place.id]: cause instanceof Error ? cause.message : "店舗情報を取得できませんでした。ページを読み直して再試行できます。" }));
+    }).finally(() => { if (active.current) setAutofilling(null); });
+  }, [places, busy, modal, autofilling, loading, autofillPaused, api]);
+  useEffect(() => {
+    if (autofillPaused !== "cooldown") return;
+    const timer = setTimeout(() => setAutofillPaused(null), 65_000);
+    return () => clearTimeout(timer);
+  }, [autofillPaused]);
+
   useEffect(() => {
     loadedPages.current = 1; setPlaces([]); setCursor(null); setPageError(""); setError(""); setLoadingMore(false);
     void reload();
@@ -206,7 +245,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
     setSaveFailed(false);
     const saved = await perform(async () => {
       if (automatic) setMessage("ログイン前に入力したURLを保存しています...");
-      const result = await api<{ place: SavedPlace; duplicate: boolean; restored: boolean; completeDetails?: boolean }>("", { method: "POST", body: JSON.stringify(parsed.data) });
+      const result = await api<{ place: SavedPlace; duplicate: boolean; restored: boolean }>("", { method: "POST", body: JSON.stringify(parsed.data) });
       if (!active.current) return;
       setSavedPlace(result.place);
       setMessage(result.restored ? "ごみ箱からマイリストに戻しました。" : result.duplicate ? "このURLは登録済みです。保存済みのお店をご確認ください。" : automatic ? "ログイン前のURLを「行きたい」に保存しました。" : "「行きたい」に保存しました。");
@@ -214,11 +253,6 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
       const destination = result.place.visitCount > 0 ? "visited" : "saved";
       clearConditions();
       if (tab !== destination) setTab(destination); else if (!searching) await reload();
-      if (active.current && result.completeDetails) {
-        touched.current.clear(); fsqDraft.current = {}; setFsqDismissed(false); setFsqSelection(null); setFsqLoading(false);
-        setFields({ name: result.place.name, address: result.place.address, note: result.place.note, genre: result.place.genre });
-        setModalError(""); setModal({ mode: "edit", place: result.place });
-      }
     });
     if (active.current && !saved) setSaveFailed(true);
   }, [api, onSaved, perform, reload, tab, clearConditions, searching]);
@@ -313,13 +347,14 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
         <button disabled={busy} role="tab" id="visited-tab" aria-selected={tab === "visited"} aria-controls="places-panel" tabIndex={tab === "visited" ? 0 : -1} onClick={() => setTab("visited")} onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) { event.preventDefault(); setTab("saved"); document.getElementById("saved-tab")?.focus(); } }}><Check size={18} />訪問済み</button>
       </div> : <p className="trash-description">ごみ箱に移してから30日間、元に戻せます。</p>}
       </div>
+      {autofillPaused === "cooldown" && <p role="status" className="place-status-copy">店舗情報の自動入力は、少し時間をおいて自動で再開します。</p>}
       <div role={tab === "trash" ? "region" : "tabpanel"} id="places-panel" aria-labelledby={tab === "trash" ? "my-places-title" : `${tab}-tab`} tabIndex={0} aria-busy={loading || loadingMore}>
         {loading && !places.length ? <p className="places-loading" role="status"><LoaderCircle size={20} className="spinning" />マイリストを読み込んでいます...</p>
           : filtered && !places.length && !error && !cursor ? <div className="places-search-empty" role="status"><Search size={28} aria-hidden="true" /><h3>条件に合うお店が見つかりませんでした。</h3><p>検索する言葉・ジャンル・リストを変えてお試しください。</p><button className="text-button" disabled={busy} onClick={clearConditions}>検索・絞り込みを解除</button></div>
           : !places.length && !error && !cursor ? <div className="places-empty"><div className="empty-illustration" aria-hidden="true"><span className="empty-circle" /><span className="empty-paper"><Coffee size={38} strokeWidth={1.3} /><i /><i /></span><span className="empty-pin"><Bookmark size={22} /></span></div><div className="empty-copy"><h3>{tab === "trash" ? "ごみ箱は空です。" : tab === "visited" ? "「行ってよかった」を、残そう。" : "最初の「行きたい」を、ここに。"}</h3><p>{tab === "trash" ? "削除した記録は、ここから元に戻せます。" : tab === "visited" ? "行きたいリストのお店から、訪問日や星の評価を残せます。" : "お店の公式サイトや、SNSで見つけた投稿。\n気になるURLから、リストをはじめましょう。"}</p>{tab === "visited" && <button className="text-button" onClick={() => setTab("saved")}>行きたいリストを見る</button>}{tab === "saved" && <a className="text-button" href="#add-place" onClick={() => sourceInput.current?.focus()}>URLを登録する<Plus size={16} /></a>}</div></div>
           : <div className="saved-place-grid">{places.map((place) => <article className="saved-place-card" data-tone={parseInt(place.id.slice(-4), 16) % 4} key={place.id} aria-label={place.name || `${place.sourceLabel}の保存URL`}>
             <div className="saved-place-top" data-genre={isGenre(place.genre) ? place.genre : undefined} data-genre-image={isGenre(place.genre) && genres[place.genre].image ? true : undefined}><PlaceArtwork id={place.id} genre={place.genre} /><span className="place-state">{place.deleted ? "ごみ箱" : place.visitCount > 0 ? "訪問済み" : place.extraction === "pending" ? "情報を取得中" : place.extraction === "ready" || place.name ? "行きたい" : "情報確認待ち"}</span><LockKeyhole size={14} aria-label="非公開" /></div>
-            <GooglePlaceSummary place={place} api={api} />
+            <GooglePlaceSummary place={place} api={api} autofillPending={!autofillPaused && needsAutofill(place) && (!attemptedAutofill.current.has(place.id) || autofilling === place.id)} autofillMessage={autofillMessages[place.id]} />
             {place.foursquare && <p className="place-status-copy">情報提供：<a href="/licenses/foursquare-NOTICE.txt" target="_blank" rel="noopener noreferrer">Foursquare OS Places</a></p>}
             {place.latestVisit && <p className="place-visit-summary"><Star size={16} aria-hidden="true" /><span>{place.latestVisit.rating === null ? "未評価" : `${place.latestVisit.rating} / 5`}<small>直近の訪問 {place.latestVisit.visitedOn.replaceAll("-", "/")} · {place.visitCount}回訪問</small></span></p>}
             {place.note && <p className="place-note">{place.note}</p>}
@@ -331,7 +366,7 @@ export function PlacesSection({ draft, onSaved, revision = 0, onChanged }: { dra
             <p className="place-date">{place.deleted ? `${new Date(place.deleteAt!).toLocaleDateString("ja-JP")}まで復元できます` : place.fetchedAt ? `店舗情報の取得: ${new Date(place.fetchedAt).toLocaleDateString("ja-JP")}` : `保存: ${new Date(place.createdAt).toLocaleDateString("ja-JP")}`}</p>
             <div className="place-visit-actions">{!place.deleted && <button className="button button-dark" disabled={busy} onClick={() => setVisitDialog({ place, mode: "add" })}><Check size={16} />{place.visitCount > 0 ? "再訪を記録" : "行ってきた"}</button>}{place.visitCount > 0 && <button className="text-button" disabled={busy} onClick={() => setVisitDialog({ place, mode: "history" })}>訪問履歴（{place.visitCount}）</button>}</div>
             <div className="place-actions">{place.deleted ? <button disabled={busy} onClick={() => void action(place, "restore")}><RotateCcw size={15} />元に戻す</button> : <>
-              <button className={!place.name.trim() ? "place-edit-prominent" : undefined} disabled={busy} onClick={() => edit(place)}><Pencil size={15} />編集</button>
+              <button className={!place.name.trim() ? "place-edit-prominent" : undefined} disabled={busy || autofilling === place.id} onClick={() => edit(place)}><Pencil size={15} />編集</button>
               <SharePlaceButton name={place.name} url={place.url} disabled={busy} foursquare={Boolean(place.foursquare)} />
               <button disabled={busy} aria-label={`${place.name || place.sourceLabel}をごみ箱へ移す`} onClick={() => { setModalError(""); setModal({ mode: "trash", place }); }}><Trash2 size={15} />削除</button>
             </>}</div>
